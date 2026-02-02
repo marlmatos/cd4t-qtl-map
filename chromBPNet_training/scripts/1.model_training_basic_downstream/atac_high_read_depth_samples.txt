@@ -1,0 +1,8 @@
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T0609.bfilt.orpham.sorted.bam
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T0801.bfilt.orpham.sorted.bam
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T0802.bfilt.orpham.sorted.bam
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T1505.bfilt.orpham.sorted.bam
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T2003.bfilt.orpham.sorted.bam
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T2010.bfilt.orpham.sorted.bam
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T2109.bfilt.orpham.sorted.bam
+/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams/T2808.bfilt.orpham.sorted.bam

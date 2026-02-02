@@ -1,13 +1,19 @@
-## hide folders
-*/utils
-*/logs
-*/.ipymb_checkpoints
-*/archive
-*/danny_omar_chrombpnet_variant_scorer_collab
-*/chrombpnet_utils
-*/plots
-*/input
-*/tmp
+# hide folders (repo root)
+ /utils/
+ /logs/
+ /.ipynb_checkpoints/
+ /archive/
+ /danny_omar_chrombpnet_variant_scorer_collab/
+ /chrombpnet_utils/
+ /plots/
+ /input/
+ /tmp/
+
+**/archive/
+**/.ipynb_checkpoints/
+**/logs/
+**/tmp/
+**/__pycache__/
 
 ##hide files
 *track_helpers_BL.R
@@ -27,3 +33,4 @@
 *.ipymb_checkpoints
 *-checkpoint.sh
 *-checkpoint.py
+*.pyc
