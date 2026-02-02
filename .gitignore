@@ -1,0 +1,26 @@
+## hide folders
+*/utils
+*/logs
+*/.ipymb_checkpoints
+*/archive
+*/danny_omar_chrombpnet_variant_scorer_collab
+*/chrombpnet_utils
+*/plots
+*/input
+*/tmp
+
+##hide files
+*track_helpers_BL.R
+*track_helpers_SJ.R
+*.bed
+*.log
+*.err
+*.pdf
+*.png
+*.tsv
+*.bim
+*.fam
+*.out
+*.bw
+*.stats.txt
+*.danny_omar_chrombpnet_variant_scorer_collab
