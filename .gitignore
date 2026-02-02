@@ -24,3 +24,6 @@
 *.bw
 *.stats.txt
 *.danny_omar_chrombpnet_variant_scorer_collab
+*.ipymb_checkpoints
+*-checkpoint.sh
+*-checkpoint.py
