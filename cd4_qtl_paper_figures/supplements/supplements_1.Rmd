@@ -1,0 +1,564 @@
+---
+title: "Supplemental Figure 1"
+author: Marliette Matos
+output: html_notebook
+---
+### Figures:
+
+- Cohort Composition
+- PCA Plot Genotypes
+
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(viridis)    # for color scales
+library(fs)
+library(scales)
+library(data.table)
+options(bitmapType = "cairo")
+source("~/cd4_qtl_paper_figures/utils/metadata_helpers.R")
+source("~/cd4_qtl_paper_figures/utils/color_pallete_helper.R")
+```
+
+
+```{r}
+# Merging PCA eigenvectors with metadata + ancestry ---------------------------
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(fs)       # for dir_create
+library(glue)
+library(scales)
+
+# ---- 0) Columns to keep ----
+keep_cols <- c(
+  "Unique_ID","Cohort_ID","GCRC_ID","WGS_sampleID","DOB","Sex",
+  "Group","Timestamp","Date","Sampling_time","Season",
+  "Process_finished","Fasting","Freezer",
+  "Volume_of_blood_.mL._received","Number_of_CD4_cells_collected_..XX.x10.5.",
+  "Number_of_tubes_stored_.5.x10.5.per.tube.","WGS_plate","WGS_wellID",
+  "WGS_plate_location","WGS_Status","WGS_seqd",
+  "WGS_gDNA_Date","WGS_gDNA_Tech"
+)
+
+# ---- 1) Read metadata (select only needed cols, preserve order) ----
+metadata <- read_csv(
+  "/gchm/metadata_harmonizing/results/post_WGS_QC/version_080923/revision_103023/cd4_WGS_PASS_ONLY_NO_CONTROLS_meta.v2.csv",
+  show_col_types = FALSE
+) %>%
+  select(any_of(keep_cols)) %>%
+  mutate(
+    WGS_sampleID = as.character(WGS_sampleID),
+    IID          = WGS_sampleID
+  ) 
+
+metadata <- format_dates_and_age_verbatim(metadata)
+
+
+# Optional: report missing columns
+missing_cols <- setdiff(keep_cols, names(metadata))
+if (length(missing_cols)) {
+  message("Missing columns from metadata: ", paste(missing_cols, collapse = ", "))
+}
+
+# ---- 2) Read eigenvectors (IID must be character to match) ----
+geno_pcs <- read_table(
+  "/gchm/cd4_QTL_analysis/01_genotype_snps_covar/02_genotype_covariates/analysis/002.v4_calculating_pcs_MAF5/CD4_all_chr_ashkenazi.364.AF1.QC.BA.king2.hwe.ld.eigenvec",
+  col_types = cols(.default = col_double(), IID = col_character())
+)
+
+# Quick type check
+cat("metadata$IID type: ", typeof(metadata$IID), "\n")
+cat("geno_pcs$IID type: ", typeof(geno_pcs$IID), "\n")
+
+# ---- 3) De-duplicate metadata by WGS_sampleID (keep first) ----
+metadata_unique <- metadata %>% distinct(WGS_sampleID, .keep_all = TRUE)
+cat("nrow(metadata_unique): ", nrow(metadata_unique), "\n")
+
+# ---- 4) Merge eigenvectors with metadata (keep all PCA rows) ----
+pca_df <- geno_pcs %>%
+  left_join(metadata_unique, join_by(IID == WGS_sampleID))
+
+cat("nrow(pca_df) after metadata merge: ", nrow(pca_df), "\n")
+print(utils::head(pca_df))
+
+# ---- 5) Bring in ancestry and merge ----
+ancestry <- read_csv(
+  "/gchm/cd4_QTL_analysis/01_genotype_snps_covar/02_genotype_covariates/scripts/AJ_ancestry.csv",
+  show_col_types = FALSE
+) %>%
+  select(IID, ASHKENAZI_Percent) %>%
+  mutate(IID = as.character(IID))  # ensure type matches
+
+pca_df <- pca_df %>% left_join(ancestry, by = "IID")
+cat("nrow(pca_df) after ancestry merge: ", nrow(pca_df), "\n")
+print(utils::head(pca_df))
+
+# ---- 6) Quick QA on WGS_plate ----
+if ("WGS_plate" %in% names(pca_df)) {
+  cat("Unique WGS_plate values:\n")
+  print(unique(pca_df$WGS_plate))
+
+  cat("Rows with NA WGS_plate:\n")
+  print(pca_df %>% filter(is.na(WGS_plate)))
+} else {
+  message("Column 'WGS_plate' not found in merged data.")
+}
+
+# ---- 7) Plot PC1 vs PC2 colored by WGS_plate ----
+stopifnot(all(c("PC1", "PC2") %in% names(pca_df)))
+
+pca_df <- pca_df %>%
+  mutate(WGS_plate = factor(WGS_plate),
+         WGS_gDNA_Tech = factor(WGS_gDNA_Tech),
+         Season  = factor(Season),
+         Number_of_cells=scale(as.integer(Number_of_CD4_cells_collected_..XX.x10.5.)))
+
+dir_create("plots")
+
+p <- ggplot(pca_df, aes(x = PC1, y = PC2, color = WGS_gDNA_Tech)) +
+  geom_point(alpha = 0.7, size = 4, stroke=1) +
+  scale_color_viridis_d(name = "gDNA Tech") +
+  labs(x = "PC1", y = "PC2", title = "PCA plot colored by gDNA Tech") +
+  theme_bw() +
+  theme(axis.title = element_text(size=25),
+        axis.text = element_text(size=20),
+        plot.title = element_text(size=25),
+    legend.text = element_text(size = 22), # Adjust the legend text size
+    legend.title = element_text(size = 20)) # Adjust the legend title size
+
+ggsave("~/cd4_qtl_paper_figures/supplements/plots/pc1_pc2_tech.pdf", p, dpi = 300, width = 8, height = 6)
+print(p)
+
+pca_df <- pca_df %>% mutate(age_mm = rescale(age, to = c(0, 1)))
+p <- ggplot(pca_df, aes(PC1, PC2, color = age_mm)) +
+  geom_point(alpha = 0.7, size = 4, stroke=1) +
+  scale_color_viridis_c(name = "Age (0–1)") +
+  labs(x = "PC1", y = "PC2", title = "PCA colored by Donor Age (min–max)") +
+  theme_bw() +
+  theme(axis.title = element_text(size=25),
+        axis.text = element_text(size=20),
+        plot.title = element_text(size=25),
+    legend.text = element_text(size = 22), # Adjust the legend text size
+    legend.title = element_text(size = 20)) # Adjust the legend title size
+
+ggsave("~/cd4_qtl_paper_figures/supplements/plots/pc1_pc2_age_scaled0_1.pdf", p, dpi = 300, width = 8, height = 6)
+print(p)
+
+write.table(
+  pca_df,
+  "~/cd4_qtl_paper_figures/supplements/plots/data_sppl1/geno_pca_df.tsv"
+)
+
+```
+
+```{r}
+# PCs × selected metadata: Hmisc + corrplot (first 15 PCs) --------------------
+
+library(dplyr)
+library(tidyr)
+library(Hmisc)
+library(corrplot)
+library(purrr)
+library(stringr)
+
+# 0) Define columns ------------------------------------------------------------
+all_pc_cols <- grep("^PC[0-9]+$", names(pca_df), value = TRUE)
+
+# order PCs numerically and keep first 15
+pc_idx <- as.integer(sub("^PC", "", all_pc_cols))
+pc_cols <- all_pc_cols[order(pc_idx)]
+pc_cols <- head(pc_cols, 10)
+
+continuous_vars <- c("age", "ASHKENAZI_Percent",
+  "Volume_of_blood_.mL._received",
+  "Number_of_CD4_cells_collected_..XX.x10.5.",
+  "Number_of_tubes_stored_.5.x10.5.per.tube.",
+  "Sampling_time"
+)
+
+discrete_vars <- c("Group",
+  "Sex", "Fasting", "Freezer", "WGS_plate", "WGS_wellID",
+  "WGS_plate_location", "WGS_gDNA_Date", "WGS_gDNA_Tech"
+)
+
+# 1) Keep only columns that exist ---------------------------------------------
+present_cont <- intersect(continuous_vars, names(pca_df))
+present_disc <- intersect(discrete_vars, names(pca_df))
+
+missing_cont <- setdiff(continuous_vars, names(pca_df))
+missing_disc <- setdiff(discrete_vars, names(pca_df))
+if (length(missing_cont)) message("Missing continuous vars: ", paste(missing_cont, collapse = ", "))
+if (length(missing_disc)) message("Missing discrete vars: ", paste(missing_disc, collapse = ", "))
+
+# 2) Build meta block: standardize continuous; encode discrete ----------------
+meta_df <- pca_df %>% select(any_of(c(present_cont, present_disc)))
+
+# Standardize continuous (z-score; quietly coerce to numeric first)
+meta_df <- meta_df %>%
+  mutate(across(all_of(present_cont), ~ {
+    x <- suppressWarnings(as.numeric(.x))
+    if (all(is.na(x))) x else as.numeric(scale(x))
+  }))
+
+# Encode discrete as integer codes and save mapping
+disc_maps <- map(present_disc, function(v) {
+  f <- factor(meta_df[[v]])
+  meta_df[[v]] <<- as.integer(f)
+  tibble(variable = v, level = levels(f), code = seq_along(levels(f)))
+}) %>% list_rbind()
+
+if (nrow(disc_maps)) {
+  message("Discrete variable encodings (level -> code):")
+  print(disc_maps)
+}
+
+# 3) Compose correlation input (first 15 PCs + selected meta) -----------------
+corr_df <- bind_cols(
+  pca_df %>% select(all_of(pc_cols)),
+  meta_df  %>% select(any_of(c(present_cont, present_disc)))
+)
+
+# Drop zero-variance or NA-only columns
+is_const <- sapply(corr_df, function(x) {
+  xnum <- suppressWarnings(as.numeric(x))
+  all(is.na(xnum)) || (sd(xnum, na.rm = TRUE) == 0)
+})
+if (any(is_const)) message("Dropping constant/NA-only cols: ", paste(names(corr_df)[is_const], collapse = ", "))
+corr_df <- corr_df[, !is_const, drop = FALSE]
+
+# 4) Correlation matrix (Spearman, pairwise-complete) -------------------------
+M <- cor(corr_df, method = "spearman", use = "pairwise.complete.obs")
+head(round(M, 2))
+
+# 5) Corrplot ------------------------------------------------------------------
+k <- ncol(M)
+
+png("~/cd4_qtl_paper_figures/supplements/plots/corrplot_pcs_selected_meta.pdf",
+    width  = max(1600, 80 * k),
+    height = max(1600, 80 * k),
+    res = 200)
+par(mar = c(0, 0, 0, 0)) 
+corrplot(M,
+  type      = "upper",
+  method    = "circle",
+  tl.col    = "black",
+  tl.cex    = 0.7,        # smaller text
+  tl.srt    = 45,         # rotate labels
+  cl.cex    = 0.8,        # colorbar text
+  mar       = c(0, 0, 0, 0),  # corrplot's own margin arg
+  addgrid.col = NA,
+  number.cex = 0.7)
+dev.off()
+
+
+```
+
+### Cohort Distributio
+```{r}
+library(ggplot2)
+library(patchwork)
+
+metadata$age_group <- cut(metadata$age, breaks = c(10, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, Inf), labels = c("20", "25", "30", "35", "40", "45", "50","55", "60", "65","70", "75", "80+"))
+
+# Group by age_group and sex, then summarize population
+grouped_data <- metadata %>%
+  group_by(age_group, Sex) %>%
+  summarise(pop = n())
+
+# Print the first few rows of the grouped data
+print(head(grouped_data))
+# Create the top part of the plot (for older ages)
+p_top <- ggplot(data = subset(grouped_data, age_group %in% c("65", "70", "75", "80+")), 
+                mapping = aes(x = ifelse(Sex == "Male", -pop, pop), 
+                              y = age_group, fill = Sex)) +
+  geom_col() +
+  scale_x_continuous(labels = abs, limits = c(-60, 50)) + # Ensure same x-axis limits
+  labs(x = "", y ="") +
+ theme_classic() + 
+  theme(
+    panel.grid.major.x=element_blank(),
+    panel.grid.minor.x=element_blank(),
+    axis.text.x = element_blank(), # Remove x-axis labels for the top plot
+    axis.ticks.x = element_blank(), # Remove x-axis ticks for top plot
+    axis.text.y = element_text(size = 20),
+    axis.line.x = element_blank(), # Remove x-axis line in the top plot
+    legend.position = "none", # Hide legend in the top plot
+    plot.margin = unit(c(0, 0.5, 0, 0.5), "cm") # Adjust margins
+  ) +
+  scale_fill_manual(values = c("#9614d0","#00c5cd"))
+
+# Create the bottom part of the plot (for younger ages)
+p_bottom <- ggplot(data = subset(grouped_data, age_group %in% c("20", "25", "30", "35", "40")), 
+                   mapping = aes(x = ifelse(Sex == "Male", -pop, pop), 
+                                 y = age_group, fill = Sex)) +
+  geom_col() +
+  scale_x_continuous(labels = abs, limits = c(-60, 50), breaks = c(-50, -25, 0, 25, 50)) + # Specific x-axis ticks
+  labs(x = "Number of Individuals", y = "Age") +
+  theme_classic() + 
+  theme(
+    panel.grid.major.x=element_blank(),
+    panel.grid.minor.x=element_blank(),
+    axis.text.x = element_text(size = 20),
+    axis.text.y = element_text(size = 20),
+    axis.title.x = element_text(size = 25),
+    axis.title.y = element_text(size = 25),
+    plot.title = element_text(hjust = 0.5, size = 18),
+    legend.text = element_text(size = 22), # Adjust the legend text size
+    legend.title = element_text(size = 20), # Adjust the legend title size
+    legend.position = "right", # Keep the legend in the bottom plot
+    plot.margin = unit(c(0.5, 0.5, 0, 0.5), "cm") # Adjust margins
+  ) +
+  scale_fill_manual(values = c("#9614d0","#00c5cd"))
+
+# Combine the two plots with a small gap to simulate the break
+combined_plot <- p_top / p_bottom + plot_layout(heights = c(1, 1.2))
+
+ggsave("~/cd4_qtl_paper_figures/supplements/plots/aging_cohort_pop_pyramid_gapped.pdf", height=7, width=7)
+print(combined_plot)
+```
+
+### WGS Batches
+```{r}
+
+pca_df<-fread("~/cd4_qtl_paper_figures/supplements/plots/data_sppl1/geno_pca_df.tsv")
+
+pt.wgs_batch<-pca_df %>%
+  count(WGS_plate, Sex) %>%                           # counts per plate × sex
+  ggplot(aes(x = WGS_plate, y = n, fill = Sex)) +
+  geom_col() +                                        # stacked by default
+  labs(
+    x = "WGS plate",
+    y = "Number of donors",
+    fill = "Sex",
+    title = "Samples per WGS plate by Sex"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(),
+        plot.title = element_text(size=20),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        panel.grid.minor = element_blank(),
+        axis.text = element_text(size=20),
+        axis.title = element_text(size=25))+
+  scale_fill_manual(values = c("#9614d0","#00c5cd")) 
+ggsave("~/cd4_qtl_paper_figures/supplements/plots/wgs_batch_plot.pdf", pt.wgs_batch, width = 5, height = 4,  dpi=300)
+pt.wgs_batch
+
+```
+### Ancestry Analysis
+##this needs to be filtered by the sample IDut the json is missing it
+```{r}
+library(jsonlite)
+library(tidyr)
+library(RColorBrewer)
+# Read JSON file
+
+ancestry <- jsonlite::fromJSON("~/cd4_qtl_paper_figures/supplements/plots/data_sppl1/all_samples_gencove_ancestry.json")
+ancestry$sample <- rownames(ancestry)
+
+# Convert wide format to long format for easy ggplot handling 
+ancestry <- ancestry %>% pivot_longer(cols = 1:18, names_to = "Region", values_to = "Percent") 
+
+# Filter to get Ashkenazi ancestry and arrange by Percent 
+ashkenazi_ancestry <- ancestry %>% filter(Region == "ASHKENAZI") %>% arrange(desc(Percent)) 
+
+# Merge the ordered samples with the original ancestry data 
+ancestry$sample <- factor(ancestry$sample, levels = ashkenazi_ancestry$sample)
+
+# Plot with samples ordered by Ashkenazi ancestry percentage 
+pt.ancestry <- ancestry %>% ggplot(aes(y = sample, x = Percent, fill = Region)) + geom_bar(stat = "identity", width = 2) 
+
+# Add theme and color scaling 
+pt.ancestry<-pt.ancestry + theme( aspect.ratio = 7/5, 
+                                  axis.text = element_text(size = 12), 
+                                  axis.text.y = element_blank(), 
+                                  axis.ticks = element_blank() ) + 
+  scale_fill_manual(values = colorRampPalette(brewer.pal(12, "Dark2"))(length(unique(ancestry$Region)))) + 
+  labs( title = "Gencove's Ancestry Analysis", x = "Percent Ancestry", y = "Samples (n=427)" )
+
+pt.ancestry
+
+```
+
+
+### number of cells per individual
+```{r}
+#after filtering
+metadata_rna <- fread("/gchm/scRNAseq/002_seurat_preprocessing/analysis/002_creating_seurat_objects/merged_object/merged_cd4_metadata_dedup.csv")
+
+WGS_id<-geno_pcs$IID
+
+df <- metadata_rna %>%
+  filter(as.character(WGS_sampleID) %in% WGS_id) %>%
+  count(scRNA_Sample_Name, name = "cells_per_ind")
+
+min_val <- min(df$cells_per_ind, na.rm = TRUE)
+med_val <- median(df$cells_per_ind, na.rm = TRUE)
+max_val <- max(df$cells_per_ind, na.rm = TRUE)
+
+ggplot(df, aes(x = cells_per_ind)) +
+  geom_histogram(bins = 30, fill = "steelblue2", color = "gray20", linewidth = 0.2) +
+  # vertical lines
+  geom_vline(xintercept = med_val, linetype = "dashed", linewidth = 0.6, color = "black") +
+  # labels at the top margin
+  annotate("label",
+           x = Inf, y = Inf,
+           label = paste0(
+             "Min: ", scales::comma(min_val), "\n",
+             "Max: ", scales::comma(max_val), "\n",
+             "Median: ", scales::comma(med_val)
+           ),
+           hjust = 1.02, vjust = 1.4, size = 6, fill = "white", label.size = 0) +
+  theme_classic() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  coord_cartesian(xlim = c(0, 2500)) +
+  scale_x_continuous(breaks = seq(0, 8000, by = 1000)) +
+  xlab("Cells per individual") +
+  ylab("Number of individuals")
+
+
+ggsave("~/cd4_project_general/histogram_cells_per_indiv_qtl_362.pdf", width = 5, height = 3,  dpi=300)
+
+
+########without filtering ######
+df <- metadata_rna %>%
+  count(scRNA_Sample_Name, name = "cells_per_ind")
+
+min_val <- min(df$cells_per_ind, na.rm = TRUE)
+med_val <- median(df$cells_per_ind, na.rm = TRUE)
+max_val <- max(df$cells_per_ind, na.rm = TRUE)
+
+pt.cells<-ggplot(df, aes(x = cells_per_ind)) +
+  geom_histogram(bins = 30, fill = "steelblue2", color = "gray20", linewidth = 0.2) +
+  # vertical lines
+  geom_vline(xintercept = med_val, linetype = "dashed", linewidth = 0.6, color = "black") +
+  # labels at the top margin
+  annotate("label",
+           x = Inf, y = Inf,
+           label = paste0(
+             "Min: ", scales::comma(min_val), "\n",
+             "Max: ", scales::comma(max_val), "\n",
+             "Median: ", scales::comma(med_val)
+           ),
+           hjust = 1.02, vjust = 1.4, size = 6, fill = "white", label.size = 0) +
+  theme_classic() +
+  theme(axis.text = element_text(size=20),
+        axis.title = element_text(size=25)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  coord_cartesian(xlim = c(0, 2500)) +
+  scale_x_continuous(breaks = seq(0, 8000, by = 1000)) +
+  xlab("Cells per individual") +
+  ylab("Number of individuals")
+
+ggsave("~/cd4_qtl_paper_figures/supplements/plots/histogram_cells_per_indiv_qtl_ALL.pdf", pt.cells, width = 7, height = 4,  dpi=300)
+pt.cells
+```
+
+## gene expression for eqtls
+```{r}
+dim(metadata_rna_qtl)
+metadata_rna_qtl <- metadata_rna %>%
+  filter(as.character(WGS_sampleID) %in% WGS_id)
+
+print(paste0("Median transcripts per cell ", median(metadata_rna_qtl$nCount_RNA)))
+print(paste0("Median genes per cell ", median(metadata_rna_qtl$nFeature_RNA)))
+
+
+
+pt.genes<-metadata_rna_qtl %>% group_by(WGS_sampleID) %>% summarise(median.rna=median(nCount_RNA),
+                                                          median.genes=median(nFeature_RNA)) %>%
+
+
+ggplot(aes(x = median.rna, y = median.genes)) +
+  geom_point(
+    shape = 21,
+    fill = "steelblue2",
+    color = "black",
+    alpha = 0.7,
+    size = 4,
+    stroke = 0.25
+  ) +
+  theme_classic() +
+  labs(
+    x = "Median RNA Transcripts per Indv.",
+    y = "Median Genes per Indv."
+  ) +
+  theme_classic() +
+  theme(axis.text = element_text(size=20),
+        axis.title = element_text(size=25)) 
+ggsave("~/cd4_qtl_paper_figures/supplements/plots/scatter_transcripts_genes_per_cell.pdf", pt.genes, width = 7, height = 4,  dpi=300)
+pt.genes
+
+```
+## scRNAseq sequencing batchs 
+```{r}
+
+plot_df<-metadata_rna %>% 
+  distinct(scRNA_batch_Dave.x, WGS_sampleID, Sex) %>%   # 1 row per individual
+  count(scRNA_batch_Dave.x, Sex, name = "n_individuals")
+
+batch.pt<-ggplot(
+  plot_df,
+  aes(x = scRNA_batch_Dave.x, y = n_individuals, fill = Sex)
+) +
+  geom_col() +  
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.10))        # a bit more headroom
+  ) +
+  labs(
+    title="scRNA Batch + Pooled Library",
+    y   = "Number of individuals",
+    fill = "Sex"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank()) +
+  scale_fill_manual(values = c("#9614d0", "#00c5cd"))
+batch.pt
+
+
+plot_df.atac<-metadata_rna  %>% filter(ATACseq==TRUE) %>%
+  distinct(scRNA_batch_Dave.x, WGS_sampleID, Sex) %>%   # 1 row per individual
+  count(scRNA_batch_Dave.x, Sex, name = "n_individuals")
+
+batch_atac.pt <-ggplot(
+  plot_df.atac,
+  aes(x = scRNA_batch_Dave.x, y = n_individuals, fill = Sex)
+) +
+  geom_col() +  
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.10))        # a bit more headroom
+  ) +
+  labs(
+    title="ATAC batch",
+    y   = "Number of individuals",
+    fill = "Sex"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "none") +
+  scale_fill_manual(values = c("#9614d0", "#00c5cd"))
+batch_atac.pt
+
+batches.pt<-cowplot::plot_grid(batch.pt, batch_atac.pt, ncol = 1, rel_heights = c(1,1), align = "hv")
+
+ggsave("~/cd4_qtl_paper_figures/supplements/plots/scrnaseq_batch.pdf", batches.pt, width = 4, height = 4,  dpi=300)
+
+batches.pt
+```
+
+
+```{r}
+
+```
+

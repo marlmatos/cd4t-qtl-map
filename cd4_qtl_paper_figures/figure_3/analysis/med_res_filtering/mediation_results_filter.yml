@@ -1,0 +1,15 @@
+paths:
+  cres_pre: '/gcgl/sbankier/results/findr_output/mediation/caqtl_CD4T_combined_sig_shared_inpeak_findr_results_chr'
+  eres_pre: '/gcgl/sbankier/results/findr_output/mediation/eqtl_all_CD4T_cells_gene_expression_chr'
+  cfin_pre: '/gcgl/sbankier/results/exposures/caQTL/caqtl_CD4T_combined_coloc_exposures_chr'
+  efin_pre: '/gcgl/sbankier/results/exposures/eQTL/eqtl_all_CD4T_cells_gene_expression_exposures_chr'
+  mrna_fn: '/gchm/cd4_QTL_analysis/02_Gene_expression/analysis/004_ProcessExpression/allcells_pseudo_cells_mean_mx.bed'
+  peak_fn: '/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/003_inputs/filtered_qsmooth_norm_cpm/filtered_qsmooth_norm_cpm_cd4_atac_processed_peaks.bed'
+  out_pre: '/gchm/cd4_qtl_paper_figures/figure_3/data/mediation_res_filter_cis_only/'
+
+parms:
+  dist_parms:
+    dist: 1000000
+  test_parms:
+  - thd: 0.01
+  - thd: 0.05

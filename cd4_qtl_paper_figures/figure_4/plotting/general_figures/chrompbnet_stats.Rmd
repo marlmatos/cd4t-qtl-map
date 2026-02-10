@@ -1,0 +1,464 @@
+---
+title: "ChromBpnet Supplement figures"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(data.table)
+```
+
+#sample coverage
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+# 1) Read the CSV ---------------------------------------------------------
+df <- read_csv("/gcgl/mmatos/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/atac_preprocessing_metrics_qc_combined.csv")
+
+# 2) Identify samples with > 100 million reads ----------------------------
+threshold <- 1e8
+
+high_read_samples <- df %>%
+  filter(Total_Aligned_Filtered_Reads > threshold)
+
+# 3) Scatter plot: Mean Base Quality vs Total Aligned Filtered Reads -----
+p <- ggplot(df, aes(x = Mean_Base_Quality, y = Total_Aligned_Filtered_Reads)) +
+  # All samples
+  geom_point(alpha = 0.6, color = "blue") +
+  # Highlight high-read samples
+  geom_point(
+    data = high_read_samples,
+    aes(x = Mean_Base_Quality, y = Total_Aligned_Filtered_Reads),
+    color = "red", alpha = 0.8, size = 3
+  ) +
+  # Labels for high-read samples (Library)
+  geom_text(
+    data = high_read_samples,
+    aes(label = Library),
+    nudge_x = 0.1,
+    nudge_y = threshold * 0.02,  # small vertical offset
+    size = 3,
+    alpha = 0.8
+  ) +
+  # Horizontal line at threshold
+  geom_hline(yintercept = threshold, linetype = "dashed", color = "red", alpha = 0.5) +
+  # Axes labels & title
+  labs(
+    x = "Mean Base Quality",
+    y = "Total Aligned Filtered Reads",
+    title = "Mean Base Quality vs Total Aligned Filtered Reads\nHighlighting Samples with >100 Million Reads"
+  ) +
+  # Format y-axis in millions
+  scale_y_continuous(
+    labels = function(x) paste0(x / 1e6, "M")
+  ) +
+  # Grid + theme
+  theme_bw() +
+  theme(
+    panel.grid.major = element_line(linetype = "dashed", color = "grey80"),
+    panel.grid.minor = element_line(linetype = "dashed", color = "grey90")
+  )
+
+
+# If you also want to see it interactively:
+print(p)
+
+cbpnet_samples <- high_read_samples %>%
+  dplyr::select(Library, Total_Aligned_Filtered_Reads, Mean_Base_Quality)
+
+# 1) Summary stats (one-row data frame)
+cbpnet_summary <- cbpnet_samples %>%
+  summarise(
+    mean.reads        = mean(Total_Aligned_Filtered_Reads),
+    sd.reads          = sd(Total_Aligned_Filtered_Reads),
+    mean.basequality  = mean(Mean_Base_Quality),
+    sd.basequality  = sd(Mean_Base_Quality)
+
+  ) 
+
+
+reads <- ggplot(cbpnet_summary, aes(x = "Reads", y = mean.reads)) +
+  geom_col(fill="#0071ba") +
+  geom_errorbar(
+    aes(
+      ymin = mean.reads - sd.reads,
+      ymax = mean.reads + sd.reads
+    ),
+    width = 0.1,
+    linewidth = 0.6
+  ) +
+  scale_y_continuous(expand = c(0, 0),
+                     labels = function(x) paste0(x / 1e6, "M")) +
+  labs(
+    x = NULL,
+    y = "Total aligned filtered reads"
+  ) +
+  theme_classic() + theme(axis.title = element_text(size=16),
+                          axis.text = element_text(size=12))
+
+baseQual <- ggplot(cbpnet_summary, aes(x = "Base Quality", y = mean.basequality)) +
+  geom_col(fill="#0071ba") +
+  geom_errorbar(
+    aes(
+      ymin = mean.basequality - sd.basequality,
+      ymax = mean.basequality + sd.basequality
+    ),
+    width = 0.1,
+    linewidth = 0.6
+  ) +
+  labs(
+    x = NULL,
+    y = "Mean Base Quality"
+  ) +
+  theme_classic() +
+  scale_y_continuous(
+    expand = c(0, 0))+
+  theme_classic() + theme(axis.title = element_text(size=13),
+                          axis.text = element_text(size=12))
+  
+
+samples.pt<-cowplot::plot_grid(reads, baseQual, align = "hv", rel_widths = c(1,1))
+samples.pt
+ggsave("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/general_figures/samplesqc.pdf", samples.pt, height = 7, width=10, units = "cm", dpi=300 )
+
+```
+## model chromosome splits
+```{r}
+library(jsonlite)
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(tibble)
+library(stringr)
+
+## 1) Point to your split JSONs (one per fold)
+json_files <- Sys.glob(
+  "~/cd4_chrombpnet/data/splits/fold_*.json"
+)
+
+json_files
+
+## 2) Read each JSON into long format: fold / chr / set -----------------------
+read_split <- function(path) {
+  x <- fromJSON(path)      # list with elements "train", "valid", "test"
+  s <- stack(x)            # data.frame: values, ind
+  
+  tibble(
+    fold = tools::file_path_sans_ext(basename(path)),  # "fold_0", "fold_1", ...
+    chr  = s$values,                                   # chr1, chr2, ...
+    set  = s$ind                                       # "train", "valid", "test"
+  )
+}
+
+splits_long <- map_dfr(json_files, read_split)
+
+# sanity check
+dplyr::glimpse(splits_long)
+#> Rows: ...
+#> Columns: fold, chr, set
+
+
+## 3) One row per fold, columns = train/valid/test, cells = comma-separated chrs
+fold_table <- splits_long %>%
+  group_by(fold, set) %>%
+  summarise(
+    chrs = paste(chr, collapse = ", "),
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    id_cols     = fold,
+    names_from  = set,   # → columns: train, valid, test
+    values_from = chrs
+  ) %>%
+  arrange(fold)
+
+fold_table
+
+fold_table_pretty <- fold_table %>%
+  mutate(
+    Fold = str_remove(fold, "^fold_")   # "fold_0" → "0"
+  ) %>%
+  dplyr::select(
+    Fold,
+    Train      = train,
+    Validation = valid,
+    Test       = test
+  ) %>%
+  arrange(as.numeric(Fold))
+
+fold_table_pretty
+
+library(gt)
+
+tb<-fold_table_pretty %>%
+  gt() %>%
+  tab_header(
+    title = "Chromosome assignment across cross-validation folds"
+  ) %>%
+  cols_label(
+    Fold      = "Fold",
+    Train     = "Train chromosomes",
+    Validation= "Validation chromosomes",
+    Test      = "Test chromosomes"
+  )
+
+library(gridExtra)   # for tableGrob
+library(grid)        # for draw
+
+pdf("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/general_figures/fold_chrom_splits.pdf",
+    width = 15, height = 3)   # adjust size as needed
+
+grid.newpage()
+grid.draw(
+  tableGrob(
+    fold_table_pretty,
+    rows = NULL,     # no row names
+    theme = ttheme_minimal() 
+  )
+)
+
+dev.off()
+
+tb
+```
+
+
+## ChromBpent Models
+```{r}
+library(jsonlite)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(cowplot)
+
+## 1) Load chrombpnet metrics -------------------------------------------------
+json_files <- Sys.glob(
+  "~/cd4_chrombpnet/chrombpnet_model_b7/fold_*/evaluation/chrombpnet_metrics*.json"
+)
+
+read_metrics <- function(path) {
+  x <- jsonlite::fromJSON(path)
+  
+  tibble::tibble(
+    file      = basename(path),
+    dir       = dirname(path),
+    fold      = basename(dirname(dirname(path))),  # .../fold_0/evaluation/file
+    spearmanr = x$counts_metrics$peaks$spearmanr,
+    pearsonr  = x$counts_metrics$peaks$pearsonr,
+    mse       = x$counts_metrics$peaks$mse,
+    median_jsd      = x$profile_metrics$peaks$median_jsd,
+    median_norm_jsd = x$profile_metrics$peaks$median_norm_jsd
+  )
+}
+
+metrics_df <- map_dfr(json_files, read_metrics) %>%
+  mutate(fold_num = readr::parse_number(fold))
+
+
+## 2) Load bias metrics (baseline model) --------------------------------------
+bias <- jsonlite::fromJSON(
+  "~/cd4_chrombpnet/chrombpnet_model_b7/fold_0/evaluation/bias_metrics.json"
+)
+
+bias_spearman <- bias$counts_metrics$peaks$spearmanr
+bias_pearson  <- bias$counts_metrics$peaks$pearsonr
+bias_mse      <- bias$counts_metrics$peaks$mse
+bias_jsd      <- bias$profile_metrics$peaks$median_norm_jsd  # normalized JSD
+
+
+## 3) Compute means across folds (ChromBPNet only) ----------------------------
+median.spearman <- median(metrics_df$spearmanr,       na.rm = TRUE)
+median.pearson  <- median(metrics_df$pearsonr,        na.rm = TRUE)
+median.jsd      <- median(metrics_df$median_norm_jsd, na.rm = TRUE)
+median.mse      <- median(metrics_df$mse,             na.rm = TRUE)
+
+## Helper: position bias text near the top of ChromBPNet range ----------------
+pos_top <- function(x) {
+  r <- range(x, na.rm = TRUE)
+  r[2] - 0.05 * diff(r)   # 5% below max
+}
+
+y_pearson_top  <- pos_top(metrics_df$pearsonr)
+y_spearman_top <- pos_top(metrics_df$spearmanr)
+y_jsd_top      <- pos_top(metrics_df$median_norm_jsd)
+y_mse_top      <- pos_top(metrics_df$mse)
+
+
+## 4) Spearman plot -----------------------------------------------------------
+spearman <- ggplot(metrics_df, aes(x = "Spearman r", y = spearmanr)) +
+  geom_boxplot(fill = "#0071ba", width = 0.4, outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.05), alpha = 0.8) +
+  # Median label
+  annotate(
+    "text",
+    x = "Spearman r",
+    y = median.spearman,
+    label = paste0("Median = ", round(median.spearman, 3)),
+    vjust = -0.7,
+    size = 3.3
+  ) +
+  # Bias label INSIDE ChromBPNet scale (no scaling by bias)
+  annotate(
+    "text",
+    x = "Spearman r",
+    y = y_spearman_top,
+    label = paste0("Bias = ", round(bias_spearman, 3)),
+    hjust = 0.5,
+    size = 3.3,
+    color = "firebrick"
+  ) +
+  labs(x = NULL, y = "Value") +
+  theme_classic() +
+  theme(
+    axis.title = element_text(size = 13),
+    axis.text  = element_text(size = 12)
+  )
+
+
+## 5) Pearson plot ------------------------------------------------------------
+pearson <- ggplot(metrics_df, aes(x = "Pearson r", y = pearsonr)) +
+  geom_boxplot(fill = "#0071ba", width = 0.4, outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.05), alpha = 0.8) +
+  annotate(
+    "text",
+    x = "Pearson r",
+    y = median.pearson,
+    label = paste0("Median = ", round(median.pearson, 3)),
+    vjust = -0.7,
+    size = 3.3
+  ) +
+  annotate(
+    "text",
+    x = "Pearson r",
+    y = y_pearson_top,
+    label = paste0("Bias = ", round(bias_pearson, 3)),
+    hjust = 0.5,
+    size = 3.3,
+    color = "firebrick"
+  ) +
+  labs(x = NULL, y = "Value") +
+  theme_classic() +
+  theme(
+    axis.title = element_text(size = 13),
+    axis.text  = element_text(size = 12),
+    axis.title.y = element_blank()
+  )
+
+
+## 6) Normalized JSD plot -----------------------------------------------------
+jsd <- ggplot(metrics_df, aes(x = "Norm. JSD", y = median_norm_jsd)) +
+  geom_boxplot(fill = "#0071ba", width = 0.4, outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.05), alpha = 0.8) +
+  annotate(
+    "text",
+    x = "Norm. JSD",
+    y = median.jsd,
+    label = paste0("Median = ", round(median.jsd, 3)),
+    vjust = -0.7,
+    size = 3.3
+  ) +
+  annotate(
+    "text",
+    x = "Norm. JSD",
+    y = y_jsd_top,
+    label = paste0("Bias = ", round(bias_jsd, 3)),
+    hjust = 0.5,
+    size = 3.3,
+    color = "firebrick"
+  ) +
+  labs(x = NULL, y = "Value") +
+  theme_classic() +
+  theme(
+    axis.title = element_text(size = 13),
+    axis.text  = element_text(size = 12),
+        axis.title.y = element_blank()
+
+  )
+
+
+## 7) MSE plot -----------------------------------------------------------------
+mse <- ggplot(metrics_df, aes(x = "MSE", y = mse)) +
+  geom_boxplot(fill = "#0071ba", width = 0.4, outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.05), alpha = 0.8) +
+  annotate(
+    "text",
+    x = "MSE",
+    y = median.mse,
+    label = paste0("Median = ", signif(median.mse, 3)),
+    vjust = -0.7,
+    size = 3.3
+  ) +
+  annotate(
+    "text",
+    x = "MSE",
+    y = y_mse_top,
+    label = paste0("Bias = ", signif(bias_mse, 3)),
+    hjust = 0.5,
+    size = 3.3,
+    color = "firebrick"
+  ) +
+  labs(x = NULL, y = "Value") +
+  theme_classic() +
+  theme(
+    axis.title = element_text(size = 13),
+    axis.text  = element_text(size = 12),
+        axis.title.y = element_blank()
+
+  )
+
+
+## 8) Combine all four panels -------------------------------------------------
+bpnet.stats <- cowplot::plot_grid(
+  spearman, pearson, jsd, mse,
+  align = "hv",
+  rel_widths = c(1, 1, 1, 1),
+  nrow = 1
+)
+
+bpnet.stats
+
+
+ggsave("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/general_figures/bpnet_stats.pdf", bpnet.stats, height = 10, width=20, units = "cm", dpi=300 )
+
+
+```
+```{r}
+motif_overlap<-fread("~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/motif_variant_overlap_hit_caller/unique_variants_overlapping_motifs.tsv")
+
+cbpnet<-fread("~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/cd4_top_cpbnet_variants_motif_overlap_moreTFS_qtl_overlap_boolean.tsv")
+
+cbpnet <- cbpnet %>%
+  dplyr::mutate(motif_hit = var_id %in% motif_overlap$variant_id)
+
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+pie_df <- cbpnet %>%
+  count(motif_hit) %>%
+  mutate(
+    prop  = n / sum(n),
+    label = paste0(n, " (", percent(prop, accuracy = 0.1), ")"),
+    motif_hit = factor(motif_hit, levels = c(TRUE, FALSE), labels = c("Yes", "No"))
+  )
+
+pie.pt<-ggplot(pie_df, aes(x = "", y = prop, fill = motif_hit)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            size = 4) +
+  scale_fill_manual(values = c("Yes" = "#0071ba", "No" = "grey70")) +
+  labs(title = "Motif hit fraction", x = NULL, y = NULL, fill = "Motif hit") +
+  theme_void()
+
+ggsave("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/general_figures/bpnet_motifhits.pdf", pie.pt, height = 10, width=10, units = "cm", dpi=300 )
+
+
+```
+
