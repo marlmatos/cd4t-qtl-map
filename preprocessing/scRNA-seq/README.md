@@ -17,23 +17,23 @@ In other words, **pt2 is not optional** in the WASP-aware workflow: it is the st
 
 ---
 
-## Directory structure
-scRNAseq/
+<h2>Directory structure</h2>
+<pre><code>scRNAseq/
 ├── assets/
-│ └── Static resources used by the pipeline (e.g., whitelist copies, docs)
+│   └── Static resources used by the pipeline (e.g., whitelist copies, docs)
 ├── bin/
-│ └── Helper scripts called by Nextflow processes (Python/R; executable)
+│   └── Helper scripts called by Nextflow processes (Python/R; executable)
 ├── conf/
-│ └── Nextflow profiles (HPC executor settings, containers/modules, resources)
+│   └── Nextflow profiles (HPC executor settings, containers/modules, resources)
 ├── main.groovy
-│ └── pt1: STARsolo (+ WASP tags) alignment/quantification outputs
+│   └── pt1: STARsolo (+ WASP tags) alignment/quantification outputs
 ├── main_merged_library.groovy
-│ └── pt2: WASP-filter BAMs → rebuild matrices → downstream steps
+│   └── pt2: WASP-filter BAMs → rebuild matrices → downstream steps
 ├── nextflow.config
-│ └── Global Nextflow configuration + profiles + container/module settings
+│   └── Global Nextflow configuration + profiles + container/module settings
 ├── nextflow_scrnaseq_STAR.sh
-│ └── Wrapper to run pt1, pt2 with correct profile/params
-
+│   └── Wrapper to run pt1, pt2 with correct profile/params
+</code></pre>
 
 
 ---

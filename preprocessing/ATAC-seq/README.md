@@ -37,8 +37,8 @@ Main steps:
 
 ---
 
-## Repository structure
-.
+<h2>Repository structure</h2>
+<pre><code>.
 ├── assets/
 ├── bin/
 ├── conf/
@@ -47,6 +47,7 @@ Main steps:
 ├── nextflow.config
 ├── run_nextflow_atac_pt1.sh
 └── run_nextflow_atac_pt2.sh
+</code></pre>
 
 ## Description
 - **`main.groovy`**  
