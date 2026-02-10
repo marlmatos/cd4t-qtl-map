@@ -1,0 +1,628 @@
+---
+title: "ChromBPNet Variant"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+library(scales)
+library(glue)
+library(purrr)
+library(stringr)
+library(ggrepel)
+library(ggseqlogo)
+library(BPCells)
+library(patchwork)
+library(ggrastr)
+library(BSgenome)
+library(BSgenome.Hsapiens.UCSC.hg38)
+library(cowplot)
+options(bitmapType = "cairo")
+
+source("~/cd4_chrombpnet/scripts/utils/locus_plotting_helper.R")
+source("~/cd4_qtl_paper_figures/utils/track_plots_helpers.R")
+source("~/cd4_qtl_paper_figures/utils/color_pallete_helper.R")
+source("~/cd4_chrombpnet/scripts/utils/track_helpers_BL.R")
+source("~/cd4_chrombpnet/scripts/utils/track_helpers_SJ.R")
+
+chrombpnet_dir="~/cd4_chrombpnet/chrombpnet_model_b7"
+
+```
+
+```{r}
+#load data
+# predicted signal
+bw_pred <- rtracklayer::import.bw(glue("{chrombpnet_dir}/prediction_scores_bw/averaged/cd4_tcells_chrombpnet_nobias.bw"))
+
+# contribution scores
+bw_contrib <- rtracklayer::import.bw(glue("{chrombpnet_dir}/contribution_scores_bw/averaged/cd4_tcells.counts_scores.bw"))
+
+hits<-readRDS("~/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/motif_instances/motifs_with_tf_annotated_filt_c90_40seq_unique_variant_hits_granges.rds")
+hits
+
+vars<-read_tsv("~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/motif_variant_overlap/cd4_top_cpbnet_variants_motif_overlap_moreTFS_boolean.tsv")
+cbpnet_qtl_annot<-read_tsv("~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/cd4_top_cpbnet_variants_motif_overlap_moreTFS_qtl_overlap_boolean.tsv")
+vars<-vars %>% left_join(cbpnet_qtl_annot, join_by(variant_id==var_id))
+rm(cbpnet_qtl_annot)
+scores<-read_tsv("~/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores/average_cd4_tcells_AJ_common_variants.mean.variant_scores.tsv") %>% distinct()
+
+head(scores)
+```
+
+
+```{r}
+vars <- vars %>% left_join(scores, by="variant_id")
+
+vars<-vars %>% mutate(ALT_effect=ifelse(logfc_x_jsd.mean>0, "positive", "negative"))
+lfc_vars<-ggplot(vars, aes(x = logfc_x_jsd.mean, fill = ALT_effect)) +
+  geom_histogram(bins = 30, color = "gray20", linewidth = 0.2) +
+  scale_fill_manual(values = c("#6dbfb8", "#be95be")) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(x = "Mean ChromBPNet LFC (ALT/REF)", y = "Number of Variants", fill = "ALT eff. on Accessibility",  title = "All Significant Variants") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16))
+
+
+
+lfc_vars
+#ggsave("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/cbpnet_var_effect_histogram.pdf", lfc_vars, height = 3, width = 6)
+
+library(cowplot)
+plot_grid(lfc_vars ,lfc_vars_mt)
+
+```
+
+
+```{r}
+vars_motifs <- vars %>% filter(motif_overlap=="TRUE") 
+head(vars_motifs)
+
+lfc_vars_mt <- ggplot(vars_motifs, aes(x = logfc_x_jsd.mean, fill = ALT_effect)) +
+  geom_histogram(bins = 30, color = "gray20", linewidth = 0.2) +
+  scale_fill_manual(values = c("#6dbfb8", "#be95be")) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(x = "Mean ChromBPNet LFC (ALT/REF)", y = "Number of Variants", fill = "ALT eff. on Accessibility", title = "Motif Overlaping Variants") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16))
+
+
+lfc_vars_mt
+#ggsave("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/cbpnet_var_MOTIF_effect_histogram.pdf", lfc_vars, height = 3, width = 6)
+```
+```{r}
+jsd_all<-ggplot(vars, aes(x = logfc_x_jsd_x_active_allele_quantile.mean, fill = ALT_effect)) +
+  geom_histogram(bins = 100, color = "gray20", linewidth = 0.2) +
+  scale_fill_manual(values = c("#6dbfb8", "#be95be")) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(x = "Mean ChromBPNet IPS (ALT/REF)", y = "Number of Variants", fill = "ALT eff. on Accessibility",  title = "All Significant Variants") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16))
+
+jsd_motif<-ggplot(vars_motifs, aes(x = logfc_x_jsd_x_active_allele_quantile.mean, fill = ALT_effect)) +
+  geom_histogram(bins = 100, color = "gray20", linewidth = 0.2) +
+  scale_fill_manual(values = c("#6dbfb8", "#be95be")) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(x = "Mean ChromBPNet IPS (ALT/REF)", y = "Number of Variants", fill = "ALT eff. on Accessibility",  title = "Motif Overlaping Variants") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16))
+
+plot_grid(jsd_all ,jsd_motif, ncol = 1)
+
+```
+```{r}
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(GGally)
+  library(ggplot2)
+  library(tidyr)
+})
+
+# df with your variables + the bucket column to color by
+df <- vars %>%
+  select(
+    bucket,                                  # <-- ensure this exists (factor is nice)
+    `ChromBPNet logFC`        = logfc.mean,
+    `JSD`                     = jsd.mean,
+    `ActiveAlleleQ`           = active_allele_quantile.mean,
+    `logFC × JSD`             = logfc_x_jsd.mean,
+    `logFC × ActiveAlleleQ`   = logfc_x_active_allele_quantile.mean,
+    `logFC × JSD × ActiveAlleleQ` = logfc_x_jsd_x_active_allele_quantile.mean
+  ) %>%
+  drop_na()
+
+# optional: make bucket a factor to control legend order
+# df$bucket <- factor(df$bucket, levels = c("Q1","Q2","Q3","Q4"))
+
+# desired legend order (optional)
+df$bucket <- factor(df$bucket, levels = c("shared", "caQTL_only", "eQTL_only", "chromBPnet"))
+
+# pick colors (chromBPnet = gray)
+bucket_cols <- c(
+  "shared"       = "#f39c12",  # blue
+  "caQTL_only"   = "#9ccb86",  # green
+  "eQTL_only"    = "#c7197c",  # red
+  "chromBPnet"   = "gray90"    # <-- gray
+)
+
+bucket_cols2 <- c(
+  "shared"       = "gray30",  # blue
+  "caQTL_only"   = "gray30",  # green
+  "eQTL_only"    = "gray30",  # red
+  "chromBPnet"   = "gray30"    # <-- gray
+)
+
+
+pyr <- ggpairs(
+  df,
+  columns = 2:ncol(df),
+  mapping = aes(color = bucket),                      # color points/lines
+  upper = list(continuous = wrap("blank")),
+  diag  = list(continuous = wrap("densityDiag", alpha = 0.25)),
+  lower = list(continuous = wrap("points", alpha = 0.4, size = 1))
+) +
+  theme_classic(base_size = 11) +
+  theme(legend.position = "right") +
+  # apply manual colors; also set fill for diagonal densities
+  scale_color_manual(values = bucket_cols, drop = FALSE) +
+  scale_fill_manual(values = bucket_cols, drop = FALSE)
+
+print(pyr)
+
+ggsave("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/cbpnet_metrics_pred_qtls.pdf", pyr, height = 10, width = 10)
+
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+vars <- vars %>%
+  mutate(
+    qtl_overlap = if_else(bucket %in% c("shared","caQTL_only","eQTL_only"),
+                          "QTL_Var", "chromBPnet"),
+    qtl_overlap = factor(qtl_overlap, levels = c("QTL_Var","chromBPnet")),
+    motif_overlap = case_when(                  # robust coercion
+      is.logical(motif_overlap) ~ motif_overlap,
+      TRUE ~ tolower(as.character(motif_overlap)) == "true"
+    )
+  )
+
+# Fill palette for qtl_overlap (interior)
+qtl_cols <- c(
+  "QTL_Var"   = "#9ccb86",  # green
+  "chromBPnet"= "#0071ba"    # gray
+)
+
+# Stroke palette for motif_overlap (outline)
+motif_cols <- c(`TRUE` = "brown", `FALSE` = NULL)
+
+motif_qtl_predict <- ggplot(
+  vars,
+  aes(
+    x     = logfc_x_active_allele_quantile.mean,
+    y     = jsd.mean,
+    fill  = qtl_overlap,     # interior: QTL vs chromBPNet
+    color = motif_overlap    # outline: motif present?
+  )
+) +
+  geom_point(shape = 21, size = 2, alpha = 0.8, stroke = 0.8) +
+  # optional: trend line
+  # geom_smooth(method = "lm", se = FALSE, linewidth = 0.5, color = "black") +
+  scale_fill_manual(values = qtl_cols,  drop = FALSE, name = "Variant class") +
+  scale_color_manual(
+    values = motif_cols,
+    drop   = FALSE,
+    name   = "Motif overlap",
+    labels = c(`TRUE` = "Motif present", `FALSE` = "No motif")
+  ) +
+  theme_classic() +
+  labs(x = "logFC × ActiveAlleleQ", y = "JSD") +
+  guides(
+    fill  = guide_legend(
+      override.aes = list(shape = 21, size = 3, color = "black", stroke = 0.6)
+    ),
+    color = guide_legend(
+      override.aes = list(shape = 21, size = 3, fill = "white", stroke = 0.9)
+    )
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.box      = "vertical",
+    legend.margin   = margin(t = 2, b = 2),
+    axis.title      = element_text(size =16),
+    axis.text       = element_text(size = 14)   # <- text size for tick labels
+    # axis.ticks    = element_line(size = 0.3) # <- tick line size if you want
+  )
+
+
+
+ggsave("~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/motif_qtl_predict.pdf", motif_qtl_predict, height = 6, width = 6, dpi = 300)
+
+motif_qtl_predict
+```
+```{r}
+vars %>% filter(abs_logfc_x_active_allele_quantile.mean > 0.5 & jsd.mean > 0.15 & motif_overlap=='TRUE' & bucket!="chromBPnet" ) %>% arrange(abs_logfc_x_jsd_x_active_allele_quantile.mean) %>% arrange((abs_logfc_x_jsd_x_active_allele_quantile.mean.pval))
+```
+
+## Plot examples
+```{r}
+source("~/cd4_qtl_paper_figures/utils/extract_variant_shap_helper.R")
+#source("~/cd4_qtl_paper_figures/utils/extract_variant_prediction_shap_helper.R")
+
+variant="chr2_134040391_C_G"
+h5_file_path <- "/gpfs/commons/home/mmatos/cd4_chrombpnet/chrombpnet_model_b7/variant_contribution_scores/averaged_cd4_tcells_AJ_common_variants.shap.counts.h5"
+
+
+#extract allele shap
+res <- extract_allele_shap_R(h5_file_path, variant)
+
+res_bw <- make_shap_bigwig(
+  shap_data = res,
+  ref_shap  = res$ref_shap,
+  alt_shap  = res$alt_shap,
+  chrom_sizes_path = "/gpfs/commons/home/mmatos/resources/genome/hg38.chrom.sizes",
+  out_dir   = "bw_out",
+  prefix    = "shap",
+  export_delta = TRUE,
+  center_idx = res$center_idx  # <- IMPORTANT: relative index inside window
+)
+
+# res_bw <- make_shap_bigwig(
+#   shap_data = res,
+#   ref_shap  = res$ref_shap,
+#   alt_shap  = res$alt_shap,
+#   chrom_sizes_path = "/gpfs/commons/home/mmatos/resources/genome/hg38.chrom.sizes",
+#   out_dir   = "~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/var_allelic_shap_counts_bigwigs/",
+#   prefix    = "shap",
+#   export_delta = TRUE
+# )
+
+
+
+source("~/cd4_qtl_paper_figures/utils/extract_variant_prediction_shap_helper_v2.R")
+avg_h5  <- "/gpfs/commons/home/mmatos/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_variant_prediction_scores.h5"
+chromsz <- "/gpfs/commons/home/mmatos/resources/genome/hg38.chrom.sizes"
+
+index<-vars %>%
+  mutate(row_index = row_number()) %>%
+  filter(variant_id == variant) %>%
+  pull(row_index)
+
+writeLines(vars$variant_id, "~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/variant_ids.txt")
+
+# Suppose variant index = 12345 corresponds to "chr1_100394464_G_A"
+bw <- make_pred_profile_bigwigs_from_h5(
+  h5_file_path     = avg_h5,
+  variant_id       = variant,
+  variant_ids_path = "~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/variant_ids.txt",
+  chr              = res$chr,
+  pos              = res$pos,
+  chrom_sizes_path = chromsz,
+  out_dir          = "bw_pred_profiles"
+)
+
+
+res2 <- make_pred_profile_bigwig(
+  h5_file_path = avg_h5,
+  idx = index,
+  chr = res$chr,
+  pos = res$pos,
+  ref = res$ref_allele,
+  alt = res$alt_allele,
+  chrom_sizes_path = chromsz,
+  out_dir = "bw_pred_profiles",
+  prefix = "pred",
+  export_delta = TRUE,          # also write ALT-REF
+  center_idx = NULL,            # assume center of L aligns to pos
+  chr_style = "UCSC"
+)
+
+
+
+region_window=50
+var_pos=res$pos
+var_contig=res$chr
+region_zoom <- paste0(var_contig, ":", var_pos-region_window, "-", var_pos+region_window)
+
+
+
+Ref_contribs <- trackplot_contribs(res_bw$gr_ref,
+                                     region = region_zoom, 
+                                     track_label = NULL,
+                                     facet_label = "Ref_contr",
+                                     genome = BSgenome.Hsapiens.UCSC.hg38,
+                                     rel_height = 1) + xlab(NULL)
+
+alt_contribs <- trackplot_contribs(res_bw$gr_alt,
+                                     region = region_zoom, 
+                                     track_label = NULL,
+                                     facet_label = "alt_contr",
+                                     genome = BSgenome.Hsapiens.UCSC.hg38,
+                                     rel_height = 1) + xlab(NULL)
+
+
+
+
+
+pred_alt<-trackplot_bw_allelic(
+  bw_ref      = res2$ref_bw,
+  bw_alt      = res2$alt_bw,
+  region      = region_zoom,
+  track_label = "ATAC signal",
+  facet_label = "CD4 T cells",
+  score_cmap  = c(ref = "#6dbfb8", alt = "#be95be")
+)
+
+
+plot_list2 <- list(pred_alt, Ref_contribs, alt_contribs)
+
+cluster="variant test"
+# Use this in your trackplot_combine2 call:
+track_plot<-trackplot_combine2(plot_list2,
+                   title = paste0(cluster, ": ", str_to_pretty(region_zoom)))
+track_plot
+
+```
+
+```{r}
+index<-vars %>%
+  mutate(row_index = row_number()) %>%
+  filter(variant_id == variant) %>%
+  pull(row_index)
+```
+
+```{r}
+
+
+plot_grid(pred_ref, pred_alt, ncol=1)
+pred_alt
+```
+```{r}
+plot_list2 <- list(pred_alt, Ref_contribs, alt_contribs)
+
+cluster="variant test"
+# Use this in your trackplot_combine2 call:
+track_plot<-trackplot_combine2(plot_list2,
+                   title = paste0(cluster, ": ", str_to_pretty(region_zoom)))
+track_plot
+```
+```{r}
+# ---- Add TSS annotations to an existing data frame --------------------------
+add_tss_annotation <- function(df, var_col) {
+  # deps
+  require(dplyr); require(stringr)
+  require(GenomicFeatures); require(GenomicRanges); require(GenomeInfoDb)
+  require(TxDb.Hsapiens.UCSC.hg38.knownGene); require(org.Hs.eg.db)
+  require(AnnotationDbi); require(tibble)
+
+  var_col <- rlang::ensym(var_col)
+
+  # --- strict parser (only 2 formats) ---
+  parse_variant_id <- function(variant_id) {
+    x <- trimws(variant_id)
+    mA <- stringr::str_match(x, "^chr([0-9XYMT]+)_([0-9]+)_[ACGT]_[ACGT]$")
+    if (!is.na(mA[1,1])) return(list(chr=paste0("chr", mA[1,2]), pos=as.integer(mA[1,3])))
+    mB <- stringr::str_match(x, "^([0-9XYMT]+):([0-9]+)\\[b\\d+\\][ACGT],[ACGT]$")
+    if (!is.na(mB[1,1])) return(list(chr=paste0("chr", mB[1,2]), pos=as.integer(mB[1,3])))
+    stop('Unrecognized variant_id format. Allowed only: "chr6_113306741_G_A" or "6:113306741[b38]G,A".')
+  }
+
+  # vector -> GRanges
+  variants_to_gr <- function(variant_ids) {
+    parsed <- lapply(variant_ids, parse_variant_id)
+    chr <- vapply(parsed, `[[`, character(1), "chr")
+    pos <- vapply(parsed, `[[`, integer(1), "pos")
+    GRanges(seqnames=chr, ranges=IRanges(start=pos, end=pos), variant_id=variant_ids)
+  }
+
+  # build TSS sets
+  build_tss_sets <- function(txdb = TxDb.Hsapiens.UCSC.hg38.knownGene, style = "UCSC") {
+    tx <- transcripts(txdb, columns = "gene_id")
+    seqlevelsStyle(tx) <- style
+    tx <- keepStandardChromosomes(tx, pruning.mode = "coarse")
+
+    tss_1bp <- promoters(tx, upstream = 0,    downstream = 1)
+    tss_1kb <- promoters(tx, upstream = 1000, downstream = 1001)
+
+    sym <- AnnotationDbi::mapIds(
+      org.Hs.eg.db,
+      keys      = as.character(mcols(tx)$gene_id),
+      keytype   = "ENTREZID",
+      column    = "SYMBOL",
+      multiVals = "first"
+    )
+    mcols(tss_1bp)$gene_id  <- mcols(tx)$gene_id
+    mcols(tss_1bp)$gene_sym <- unname(sym[as.character(mcols(tx)$gene_id)])
+    mcols(tss_1kb)$gene_id  <- mcols(tx)$gene_id
+    mcols(tss_1kb)$gene_sym <- unname(sym[as.character(mcols(tx)$gene_id)])
+
+    list(tss_1bp = tss_1bp, tss_1kb = tss_1kb)
+  }
+
+  # annotate vector
+  annotate_variants_tss <- function(variant_ids) {
+    var_gr <- variants_to_gr(variant_ids)
+    seqlevelsStyle(var_gr) <- "UCSC"
+    var_gr <- keepStandardChromosomes(var_gr, pruning.mode = "coarse")
+
+    tss <- build_tss_sets()
+    tss1  <- tss$tss_1bp
+    tss1k <- tss$tss_1kb
+
+    ov_tss <- findOverlaps(var_gr, tss1)
+    overlaps_TSS_1bp <- rep(FALSE, length(var_gr))
+    overlaps_TSS_1bp[queryHits(ov_tss)] <- TRUE
+
+    within_1kb_TSS <- overlapsAny(var_gr, tss1k)
+
+    nearest <- distanceToNearest(var_gr, tss1, ignore.strand = FALSE)
+    nearest_dist <- rep(NA_integer_, length(var_gr))
+    nearest_gene <- rep(NA_character_, length(var_gr))
+    nearest_chr  <- rep(NA_character_, length(var_gr))
+    nearest_pos  <- rep(NA_integer_, length(var_gr))
+
+    nearest_dist[queryHits(nearest)] <- mcols(nearest)$distance
+    nh <- subjectHits(nearest); ok <- !is.na(nh)
+    if (any(ok)) {
+      nearest_gene[ok] <- mcols(tss1)$gene_sym[nh[ok]]
+      nearest_chr[ok]  <- as.character(seqnames(tss1))[nh[ok]]
+      nearest_pos[ok]  <- start(tss1)[nh[ok]]
+    }
+
+    tibble(
+      !!var_col           := mcols(var_gr)$variant_id,   # key to join on
+      overlaps_TSS_1bp    = overlaps_TSS_1bp,
+      within_1kb_TSS      = within_1kb_TSS,
+      nearest_TSS_gene    = nearest_gene,
+      nearest_TSS_chr     = nearest_chr,
+      nearest_TSS_pos     = nearest_pos,
+      nearest_TSS_dist_bp = nearest_dist
+    )
+  }
+
+  # do it and join back
+  ann <- annotate_variants_tss(unique(dplyr::pull(df, !!var_col)))
+  dplyr::left_join(df, ann, by = rlang::as_name(var_col))
+}
+
+```
+
+```{r}
+motif_hits<-read_tsv("~/cd4_chrombpnet/chrombpnet_model_b7/motif_hit_calls/motifs_hits_FILTVARS/hits_unique.tsv")
+motif_hits %>% group_by(peak_id) %>% summarise(mean_importance=mean(hit_importance)) %>% ggplot(aes(mean_importance)) + geom_histogram()
+
+
+vars<-read_tsv("~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/motif_variant_overlap/cd4_top_cpbnet_variants_motif_overlap_moreTFS_boolean.tsv")
+vars_motifs<-read_tsv("~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/motif_variant_overlap/motif_variant_overlap_all.tsv")
+vars_motifs %>% filter(match_confidence=="strong")  %>% ggplot(aes(hit_coefficient_global)) + geom_histogram() + xlim(-0.001, 0.015) 
+
+vars_motifs %>% filter(match_confidence=="strong") %>% arrange(desc(hit_coefficient_global)) %>% split(TF_annotation)
+
+length(unique(motif_hits$peak_id))
+```
+
+```{r}
+varsscores<-read_tsv("~/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores/average_cd4_tcells_AJ_common_variants.mean.variant_scores.tsv") 
+vars<-read_tsv("~/cd4_qtl_paper_figures/figure_2_chrombpnet/data/motif_variant_overlap/cd4_top_cpbnet_variants_motif_overlap_moreTFS_boolean.tsv")
+vars<-vars %>% distinct() %>% dplyr::select(c(variant_id,motif_overlap))
+
+varsscores<-varsscores %>% filter(variant_id %in% vars$variant_id) %>% left_join(vars, by="variant_id")
+
+res_annot <- add_tss_annotation(varsscores, variant_id)
+
+eff_neg<-res_annot %>% filter(motif_overlap==TRUE & logfc.mean>0) %>% arrange(desc(logfc.mean))
+
+pos_neg<-res_annot %>% filter(motif_overlap==TRUE & logfc.mean<0) %>% arrange(logfc.mean)
+
+writeLines(res_annot$variant_id, "~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/cbpnet_examples/variant_plot.txt")
+writeLines(eff_neg$variant_id, "~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/cbpnet_examples/eff_neg_variant_plot.txt")
+writeLines(pos_neg$variant_id, "~/cd4_qtl_paper_figures/figure_2_chrombpnet/plotting/cbpnet_examples/pos_neg_variant_plot.txt")
+
+
+```
+
+Variants testes
+"chr6_113306741_G_A" - strong, no genes around it
+
+
+
+```{r}
+
+#variant to plot
+variant="chr17_64066984_C_A"
+var<-parse_variant_id(variant)
+var_contig=var$chr
+var_pos=var$pos
+region_window=50
+
+#resources
+source("~/cd4_qtl_paper_figures/utils/track_plots_helpers.R")
+source("~/cd4_qtl_paper_figures/utils/cbpnet_extract_allelic_contrib_plus_atrr_bigwigs.R")
+atrr = "/gpfs/commons/home/mmatos/cd4_chrombpnet/chrombpnet_model_b7/variant_contribution_scores/averaged_cd4_tcells_AJ_common_variants.shap.counts.h5"     
+data = "/gpfs/commons/home/mmatos/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_variant_prediction_scores.h5"   
+tsv  = "/gpfs/commons/home/mmatos/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores/average_cd4_tcells_AJ_common_variants.mean.variant_scores.tsv"
+chrom_sizes="/gpfs/commons/home/mmatos/resources/genome/hg38.chrom.sizes"
+motifs<-readRDS("~/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/motif_instances/motifs_with_tf_annotated_filt_c90_40seq_unique_variant_hits_granges.rds")
+
+#extract variant predictions and constributions
+#init_variant_bw_exporter()
+res <- reticulate::py$export_variant_bigwigs_from_paths(
+  variant_id   = variant,
+  tsv_path     = tsv,
+  pred_h5      = data,
+  attr_h5      = atrr,
+  chrom_sizes_path  = chrom_sizes,
+  outdir       = "bw_out",
+  prefix       = NULL,          # or "mytag"
+  write_channels = TRUE         # also write A/C/G/T bigwigs
+)
+
+#get bigwigs
+ref_bw<-rtracklayer::import.bw(res$pred_REF)
+alt_bw<-rtracklayer::import.bw(res$pred_ALT)
+atrr_ref_bw<-rtracklayer::import.bw(res$contribSum_REF)
+atrr_alt_bw<-rtracklayer::import.bw(res$contribSum_ALT)
+
+
+
+#plot
+region_zoom <- paste0(var_contig, ":", var_pos-region_window, "-", var_pos+region_window)
+
+#--allele chromatin predictions
+pred<-trackplot_bw_allelic(
+  bw_ref      = ref_bw,
+  bw_alt      = alt_bw,
+  region      = region_zoom,
+  track_label = "ATAC signal",
+  facet_label = "CD4 T cells",
+  score_cmap  = c(ref = "#6dbfb8", alt = "#be95be")
+)
+
+
+Ref_contribs <- trackplot_contribs(
+  bw = atrr_ref_bw,
+  region = region_zoom,
+  genome = BSgenome.Hsapiens.UCSC.hg38,
+)
+
+alt_contribs <-trackplot_contribs(
+  bw = atrr_alt_bw,
+  region = region_zoom,
+  genome = BSgenome.Hsapiens.UCSC.hg38
+)
+track_hits <- trackplot_genome_annotation(loci = motifs,
+                                          region = region_zoom,
+                                          color_by = "motifs_disrupted",
+                                          show_strand = TRUE,
+                                          colors = c("pink", "red"), 
+                                          label_size = 3,
+                                          label_by = "TF_family",
+                                          track_label = "TF Motifs")
+
+
+subset_g <- get_subset_genes_for_region(region_zoom)
+
+# Plot (region_zoom should be "chr:start-end")
+track_genes <- trackplot_gene(subset_g, region_zoom) + ggplot2::guides(color = "none")
+track_genes
+
+
+plot_list2<-list(pred, Ref_contribs, alt_contribs, track_hits, track_genes)
+
+cluster=var_pos
+# Use this in your trackplot_combine2 call:
+track_plot<-trackplot_combine2(plot_list2,
+                   title = paste0(cluster, ": ", str_to_pretty(region_zoom)))
+track_plot
+```
+
+

@@ -1,0 +1,176 @@
+---
+title: "Comparison of Allele specific quantification and ChromBPNet predictions"
+author: "Marliette Matos"
+project: "CD4 QTLS"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+options(bitmapType="cairo")
+```
+
+
+## Read ChromBPNet Results
+```{r}
+# read top 1% scored variants within peaks 
+cBPNet_var<-read.delim2("/gchm/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores/average_cd4_tcells_AJ_common_variants.mean.variant_scores.tsv")
+head(cBPNet_var)
+
+#please note that some variant are duplicated because they might be associated to multiple subpeaks of the same peak
+summary(duplicated(cBPNet_var$variant_id))
+head(cBPNet_var)
+```
+
+## Concoordance wbetween top 1% ChromBPNet variants within peaks and ASE quantification
+### ASE quantification was performed with phASEr
+phASErpop: The tool phases variant alleles with haplotype expression data and outputs numerous statistics, including allelic fold change (aFC, Mohammadi, 2017) per sample, and a median across samples for individuals that heterozygous for the variant of interest. This median can be used as the estimate of the regulatory variant effect size.
+
+```{r}
+#read phASEr results allele specific chromatin accessibility quantification for ChromBPnet Variants
+ASacc<-read.delim2("~/cd4_integration_analyses/allele_specific_feature_quantification/open_chromatin/results/chrompnetPeaks_allelic_counts/chrompnetPeaks_allelic_counts")
+head(ASacc)
+
+#remove reducancy of subpeaks in the allele specific quantification
+# Step 1: Extract the base gene name (removing letter suffixes)
+ASacc$base_gene <- gsub("([0-9]+)[a-z]$", "\\1", ASacc$gene)
+
+#Group by var_id and select one row per group
+ASacc <- as.data.frame(ASacc) %>%
+  mutate(gene = gsub("([0-9]+)[a-z]$", "\\1", gene)) %>%
+  distinct(var_id, .keep_all = TRUE)
+
+ASacc<-as_tibble(ASacc)
+head(ASacc)
+```
+### Plot correlation between allelic fold chnages estimated from chromASE and ChromBPNet
+```{r}
+# join
+summary(ASacc$var_id %in% cBPNet_var$variant_id)
+result <- dplyr::inner_join(ASacc, cBPNet_var, by = c("var_id" = "variant_id"))
+
+# robust numeric parsing
+result <- result %>%
+  dplyr::mutate(
+    var_het_afc  = readr::parse_double(as.character(var_het_afc)),
+    logfc.mean   = readr::parse_double(as.character(logfc.mean)),
+    pval_cbpnet  = readr::parse_double(as.character(logfc_x_jsd_x_active_allele_quantile.mean.pval)),
+    # phASER is typically ln(aFC); convert to log2(aFC)
+    ase_log2afc  = var_het_afc / log(2)
+  ) %>%
+  dplyr::filter(
+    is.finite(ase_log2afc),
+    is.finite(logfc.mean),
+    is.finite(pval_cbpnet)
+  )
+
+sig05 <- result %>% dplyr::filter(pval_cbpnet < 0.05)
+
+r05 <- cor(sig05$ase_log2afc, sig05$logfc.mean, method = "pearson", use = "complete.obs")
+t05 <- cor.test(sig05$ase_log2afc, sig05$logfc.mean, method = "pearson")
+
+p1 <- ggplot(sig05, aes(x = ase_log2afc, y = logfc.mean)) +
+  geom_point(alpha = 0.3, size = 0.5) +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  labs(
+    x = "ASE log2(aFC) (phASER)",
+    y = "ChromBPNet logFC (mean)",
+    title = paste0("ChromBPNet vs phASER (p < 0.05, r = ", round(r05, 3),
+                   ", p = ", format.pval(t05$p.value, digits = 3), ")")
+  ) +
+  theme_bw() +
+  theme(axis.title = element_text(size = 14),
+        axis.text  = element_text(size = 14))
+
+ggsave("plots/chrombpnet_vs_phaser_p05.pdf", p1, height = 15, width = 15, units = "cm", dpi = 300)
+
+sig01 <- result %>% dplyr::filter(pval_cbpnet < 0.01)
+
+r01 <- cor(sig01$ase_log2afc, sig01$logfc.mean, method = "pearson", use = "complete.obs")
+t01 <- cor.test(sig01$ase_log2afc, sig01$logfc.mean, method = "pearson")
+
+p2 <- ggplot(sig01, aes(x = ase_log2afc, y = logfc.mean)) +
+  geom_point(alpha = 0.2, color = "grey9") +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  labs(
+    x = "ASE log2(aFC) (phASER)",
+    y = "ChromBPNet logFC (mean)",
+    title = paste0("ChromBPNet vs phASER (p < 0.01, r = ", round(r01, 3),
+                   ", p = ", format.pval(t01$p.value, digits = 3), ")")
+  ) +
+  theme_bw()
+
+ggsave("plots/chrombpnet_vs_phaser_p01.pdf", p2, height = 10, width = 10, units = "cm", dpi = 300)
+
+p1
+p2
+```
+
+#read chromatinQTL results
+
+```{r}
+### read cis independent qtls ####
+all_res <- list()
+
+  files <- list.files(path = paste0('~/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/006_caQTLs/filtered_qsmooth_norm_cpm_1mb/'), 
+                      pattern = paste0('cd4_qsmooth_cpm_chromatin_narrowpeaks.independent_cis_QTL_pairs', '\\.chr\\d+\\.csv'), 
+                      full.names = TRUE)
+  res <- lapply(files, function(file) read.csv(file, sep=""))
+  res_df <- do.call('rbind.data.frame', res)
+
+  
+# Assuming your data frame is called "data"
+caQTLs <- res_df %>%
+  mutate(var_id = gsub("([0-9]+):([0-9]+)\\[b38\\]([A-Z]),([A-Z])", 
+                          "chr\\1_\\2_\\3_\\4", 
+                          variant_id))
+```
+
+
+```{r}
+ASacc_qtl <- read.delim2("~/cd4_integration_analyses/allele_specific_feature_quantification/open_chromatin/results/phaser_caQTL_chromatin_peaks_ae/chromatin_peaks_allelic_counts_pop")
+
+caQTLs_summary <- caQTLs %>%
+  dplyr::group_by(var_id) %>%
+  dplyr::summarise(
+    dplyr::across(where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+    .groups = "drop"
+  )
+
+result3 <- dplyr::inner_join(ASacc_qtl, caQTLs_summary, by = "var_id")
+
+plot_data <- result3 %>%
+  mutate(
+    var_het_afc = readr::parse_double(as.character(var_het_afc)),
+    log2_fc = var_het_afc / log(2)     # ln(aFC) -> log2(aFC)
+  ) %>%
+  filter(is.finite(log2_fc), is.finite(slope)) %>%
+  filter(abs(slope) < 7)
+
+
+correlation <- cor(plot_data$log2_fc, plot_data$slope,
+                   method = "pearson", use = "complete.obs")
+cor_test <- cor.test(plot_data$log2_fc, plot_data$slope,
+                     method = "pearson", use = "complete.obs")
+
+ggplot(plot_data, aes(x = slope, y = log2_fc)) +
+  geom_point(alpha = 0.3, size = 0.5) +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  labs(
+    x = "caQTL beta",
+    y = "Chromatin AS Accessibility log2(aFC)",
+    title = paste0(
+      "phASER vs. caQTL effect (r = ", round(correlation, 3),
+      ", p = ", format.pval(cor_test$p.value, digits = 3), ")"
+    )
+  ) +
+  theme_bw() +
+  theme(axis.title = element_text(size = 14),
+        axis.text  = element_text(size = 14)) + coord_flip()
+
+
+ggsave("plots/caQTL_vs_phaSER.pdf", height = 10, width =12, units = "cm", dpi = 300)
+
+```
+

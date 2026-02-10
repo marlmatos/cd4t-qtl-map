@@ -1,0 +1,4 @@
+"https://www.encodeproject.org/metadata/?type=Annotation&%40id=%2Fannotations%2FENCSR681WRM%2F&files.analyses.%40id=%2Fanalyses%2FENCAN596BAK%2F&files.preferred_default=true"
+https://www.encodeproject.org/files/ENCFF651QPF/@@download/ENCFF651QPF.bed.gz
+https://www.encodeproject.org/files/ENCFF623ILS/@@download/ENCFF623ILS.bigBed
+

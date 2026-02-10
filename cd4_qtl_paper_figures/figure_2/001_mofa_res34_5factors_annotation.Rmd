@@ -1,0 +1,259 @@
+---
+title: "Annotating MOFA factors"
+author: "Marliette Matos"
+output: html_notebook
+---
+
+
+```{r}
+library(MultiAssayExperiment)
+library(MOFA2)
+library(ggplot2)
+library(MOFAdata)
+library(cowplot)
+library(dplyr)
+library(LaCroixColoR)
+library(quickpalette)
+
+
+setwd("~/cd4_CellRegMap/003_plotting_notebooks/plotting_01312025/")
+options(bitmapType="cairo")
+```
+
+```{r}
+model34 <- load_model("/gpfs/commons/home/mmatos/cd4_CellRegMap/001_preprocessing/results_01312025/mofa_factors/mofa_trained/cd4_aging_filt_sce_mofa_expectations_res34.hdf5")
+head(model34@cache$variance_explained$r2_per_factor) # group 1
+var<-plot_variance_explained(model34)
+
+pdf("plots_mofa_annotation/cofactor_corr_dotplot_celltype.pdf", width = 5, height = 4)
+
+correlate_factors_with_covariates(model34, covariates = c("log1p_total_counts_MITO", "log1p_total_counts_RIBO", "log1p_total_counts", "log1p_n_genes_by_counts"))
+
+plot_factor(model34, 
+  factor = 1:5,
+  color_by = "cd4_subtypes_l1",
+)
+
+
+plot_factor(model34, 
+  factor = 1:5,
+  color_by = "scRNA_batch_Dave.x",
+)
+
+plot_factor_cor(model34)
+
+dev.off()
+```
+
+```{r}
+p<-plot_factors(model34, 
+  factors = 1:5,
+  dot_size=1,
+  color_by = "cd4_subtypes_l1"
+)
+pdf("plots_mofa_annotation/mofa_factor_corr_scatter.pdf", width = 10, height =7)
+p
+dev.off()
+p
+```
+
+
+```{r, fig.width=10, fig.height=8}
+# Create a list to store the plots
+plot_list <- list()
+
+# Generate and store each plot
+for (i in 1:5) {
+  # Store each plot in the list instead of printing it
+  plot_list[[i]] <- plot_weights(model34, 
+    view = "rna", 
+    factors = i,
+    nfeatures = 20, 
+    text_size = 4
+  )
+}
+
+# Arrange the plots in a grid (e.g., 2 rows, 5 columns)
+combined_plot <- plot_grid(
+  plotlist = plot_list,
+  ncol = 3,
+  nrow = 2,
+  labels = paste("Factor", 1:5)
+)
+
+# Display the combined plot
+combined_plot
+
+# Optional: Save the combined plot
+ggsave("plots_mofa_annotation/factor_cowplot_gene_weights_res34.pdf", combined_plot, width = 20, height = 10)
+```
+### GO Analysis
+
+```{r}
+weights <- get_weights(model34, views = "all", factors = "all")$rna
+head(weights)
+str(weights)
+```
+```{r}
+# Convert matrix to dataframe and preserve rownames as gene column
+weights_df <- as.data.frame(weights)
+weights_df$gene <- rownames(weights)
+
+# Get top genes per factor (top 10% by absolute weight)
+top_genes_per_factor <- lapply(colnames(weights_df)[colnames(weights_df) != "gene"], function(factor) {
+  
+  cutoff <- quantile(abs(weights_df[[factor]]), 0.97, na.rm = TRUE)
+  
+  top_genes <- weights_df %>%
+    filter(abs(.data[[factor]]) >= cutoff) %>%
+    pull(gene)
+  
+  return(top_genes)
+})
+
+names(top_genes_per_factor) <- colnames(weights_df)[colnames(weights_df) != "gene"]
+head(top_genes_per_factor)
+```
+```{r, fig.width=10, fig.height=6}
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+set.seed(1234)
+# Prepare a list to hold results
+all_ego_simplified <- list()
+all_top_terms <- list()
+
+for (factor_name in names(top_genes_per_factor)) {
+  message("Processing ", factor_name)
+
+  # 1. Get genes
+  genes <- top_genes_per_factor[[factor_name]]
+  
+  # 2. Map to Entrez IDs
+  gene_df <- tryCatch({
+    bitr(genes, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
+  }, error = function(e) return(NULL))
+  
+  if (is.null(gene_df) || nrow(gene_df) < 10) next
+  
+  entrez_ids <- gene_df$ENTREZID
+  
+  # 3. Run enrichGO
+  ego <- tryCatch({
+    enrichGO(gene = entrez_ids,
+             OrgDb = org.Hs.eg.db,
+             keyType = "ENTREZID",
+             ont = "BP",
+             pAdjustMethod = "BH",
+             qvalueCutoff = 0.05,
+             readable = TRUE)
+  }, error = function(e) return(NULL))
+  
+  if (is.null(ego) || nrow(ego@result) == 0) next
+  
+  # 4. Simplify
+  ego_simplified <- simplify(ego,
+                             cutoff = 0.7,
+                             by = "p.adjust",
+                             select_fun = min,
+                             measure = "Wang")
+  
+  all_ego_simplified[[factor_name]] <- ego_simplified
+  
+  # 5. Extract top 3 terms
+  top_terms <- ego_simplified@result %>%
+    arrange(p.adjust) %>%
+    slice_head(n = 10) %>%
+    mutate(Factor = factor_name) %>%
+    dplyr::select(Factor, Description, p.adjust, geneID, Count )
+  
+  all_top_terms[[factor_name]] <- top_terms
+}
+
+# Combine all top terms into one dataframe
+top_terms_df <- bind_rows(all_top_terms)
+write.csv(top_terms_df, file = "plots_mofa_annotation/go_enrichement_BP_mofa_res34.csv")
+
+# Manually selected terms of interest
+selected_terms <- c(
+  "CD4-positive, CD25-positive, alpha-beta regulatory T cell differentiation",
+  "MHC class II protein complex assembly",
+  "regulation of memory T cell differentiation",
+  "leukocyte mediated cytotoxicity",
+  "defense response to virus",
+  "response to type I interferon",
+  "regulation of cell killing",
+  "regulation of T cell mediated immunity",
+  "immunological memory formation process"
+)
+
+# Filter, compute -log10(p), and get top 3 per factor
+top_terms_filtered <- top_terms_df %>%
+  filter(Description %in% selected_terms) %>%
+  mutate(neg_log10_padj = -log10(p.adjust)) %>%
+  group_by(Factor) %>%
+  slice_min(order_by = p.adjust, n = 3, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(Description = factor(Description, levels = rev(unique(Description))))
+
+# Color palette
+pal <- lacroix_palette("CeriseLimon", n = length(unique(top_terms_filtered$Factor)), type = "discrete")
+
+# Plot
+p <- ggplot(top_terms_filtered, aes(x = Description, y = neg_log10_padj, fill = Factor)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ Factor, scales = "free_y", ncol = 1) +
+  scale_fill_manual(values = pal) +
+  labs(title = "Top Selected GO BP Terms per MOFA Factor",
+       x = "GO Term", y = "-log10(p.adjust)") +
+  theme_minimal() +
+  theme(plot.title = element_text(vjust = 1),
+        strip.text = element_text(face = "bold"),
+        axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 12),
+        legend.position = "none")
+
+p
+
+# Save plot
+ggsave("plots_mofa_annotation/mofa_gene_weights_res34_GO_BP.pdf", p, width = 7, height = 6)
+
+```
+
+```{r, fig.width=4, fig.height=8}
+library(ComplexHeatmap)
+library(circlize)
+weights_mat <- as.matrix(weights[, grep("^Factor", colnames(weights_df))])
+
+#rownames(weights_mat) <- weights$gene
+scaled_weights <- t(scale(t(weights_mat)))  # center/scale per gene
+
+# Union of all top genes across factors
+selected_genes <- unique(unlist(top_genes_per_factor))
+
+# Subset the scaled weights matrix
+subset_weights <- scaled_weights[rownames(scaled_weights) %in% selected_genes, ]
+
+# Plot
+p<-pheatmap(subset_weights,
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,
+         show_rownames = TRUE,border_color = NA,
+         main = "Top Gene Weights per MOFA Factor",
+         color = colorRampPalette(c(c("lightblue", "white","darkgreen" )))(100))
+p
+
+pdf("plots_mofa_annotation/mofa_gene_weights_res34_heatmap.pdf", width = 4, height = 8)
+p
+dev.off()
+
+```
+
+
+
+
+
+
