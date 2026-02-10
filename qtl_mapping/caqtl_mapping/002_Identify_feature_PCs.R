@@ -6,7 +6,7 @@
 # 
 #--------------------------
 # Libraries
-.libPaths("/gpfs/commons/home/mmatos/backup_R/x86_64-pc-linux-gnu-library")
+.libPaths("/gchm/backup_R/x86_64-pc-linux-gnu-library")
 library(PCAForQTL)
 library(data.table)
 library(RNOmni)
@@ -18,8 +18,8 @@ args <- commandArgs(trailingOnly = TRUE)
 filtered_table <- args[1]  # This is the table file passed from the SLURM array
 
 # Directories
-root_dir <- "/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/"
-metadata_path <- "/gpfs/commons/home/mmatos/ATAC-seq_analysis/diff_accesibility_ana/results/metadata/cd4_atac_metadata_scrna_union.csv"
+root_dir <- "/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/"
+metadata_path <- "/gchm/ATAC-seq_analysis/diff_accesibility_ana/results/metadata/cd4_atac_metadata_scrna_union.csv"
 
 filtered_table="filtered_qsmooth_norm_cpm.txt"
 # Make output directory for the specific table
@@ -69,7 +69,7 @@ colnames(ashkenazi_ancestry) <- c("WGS_sampleID", "Parent_Directory", "AJ_ancest
 ashkenazi_ancestry$WGS_sampleID <- paste0("g", ashkenazi_ancestry$WGS_sampleID)
 
 #read other atac-seq qc metrics 
-seq_metrics<- read.csv("/gpfs/commons/groups/lappalainen_lab/mmatos/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/atac_preprocessing_metrics_qc_combined.csv" )           
+seq_metrics<- read.csv("/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/atac_preprocessing_metrics_qc_combined.csv" )           
 
 # Merge with Metadata
 metadata <- merge(metadata, seq_metrics, by.x = "ATAC_Sample_Name", by.y="Library")                 

@@ -21,7 +21,7 @@ filtered_table <- args[1]  # This is the table file passed from the SLURM array
 filtered_table="filtered_qsmooth_norm_cpm.txt"
 
 #directories
-root_dir="/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/"
+root_dir="/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/"
 
 # Make output directory for the specific table
 out_dir <- paste0(root_dir, "005_covariates/", gsub(".txt", "", filtered_table), "/")

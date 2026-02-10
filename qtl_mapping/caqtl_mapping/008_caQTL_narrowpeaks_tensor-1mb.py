@@ -28,14 +28,14 @@ chr_num = int(inputArgs[0])
 
 type="filtered_qsmooth_norm_cpm"
 
-directory=f"/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/006_caQTLs/{type}_1mb"
+directory=f"/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/006_caQTLs/{type}_1mb"
 os.makedirs(directory, exist_ok = True)
 os.chdir(directory)
 
 # define paths to data
-plink_prefix_path = f"/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/004_genotypes/plink/per_chr_plink_files/chr{chr_num}_ashkenazi.362.AF1.QC.BA.king2.hwe.annot"
-expression_bed = f"/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/003_inputs/{type}/{type}_cd4_atac_processed_peaks.bed"
-covariates_file = f"/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/005_covariates/{type}/{type}_atac_covs_PCs_age_sex.txt"
+plink_prefix_path = f"/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/004_genotypes/plink/per_chr_plink_files/chr{chr_num}_ashkenazi.362.AF1.QC.BA.king2.hwe.annot"
+expression_bed = f"/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/003_inputs/{type}/{type}_cd4_atac_processed_peaks.bed"
+covariates_file = f"/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/005_covariates/{type}/{type}_atac_covs_PCs_age_sex.txt"
 
 
 prefix = "cd4_qsmooth_cpm_chromatin_narrowpeaks"
@@ -157,7 +157,7 @@ if any(cis_df.qval < 0.05):
 else :
 	print("No significant eQTLs with qval < 0.05. Do not identify conditionally independent QTLs.")
 
-print("Analaysis finished!")
+print("Analysis finished!")
 
 
 ####

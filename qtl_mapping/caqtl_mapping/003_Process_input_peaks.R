@@ -1,12 +1,12 @@
 #------------------------
 # Description: This script prepare input peak file for tensorQTL
-#
-# Author: Marliette Matos
+# Author: Angli XUE
+# Adapted by: Winona Oliveros Marliette Matos
 # Date: 09/25/2024
 # 
 #--------------------------
 #libraries
-.libPaths("/gpfs/commons/home/mmatos/backup_R/x86_64-pc-linux-gnu-library")
+.libPaths("/gchm/backup_R/x86_64-pc-linux-gnu-library")
 library(data.table)
 library(dplyr)
 library(tidyr)
@@ -17,8 +17,8 @@ args <- commandArgs(trailingOnly = TRUE)
 filtered_table <- args[1]  # This is the table file passed from the SLURM array
 filtered_table="filtered_qsmooth_norm_cpm.txt"
 # Directories
-root_dir <- "/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/"
-annot_file <- "/gpfs/commons/groups/lappalainen_lab/mmatos/cd4_aging_project/data/ATAC-seq/atac_preprocessing/merged_library/peak_calling/MACS3/BAMPE/peaks_102024/cd4_atac_padded_summits_peaks.bed" #selecting this becuase already has the correct format
+root_dir <- "/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/"
+annot_file <- "/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/merged_library/peak_calling/MACS3/BAMPE/peaks_102024/cd4_atac_padded_summits_peaks.bed" #selecting this becuase already has the correct format
 
 # Make output directory for the specific table
 out_dir <- paste0(root_dir, "003_inputs/", gsub(".txt", "", filtered_table), "/")

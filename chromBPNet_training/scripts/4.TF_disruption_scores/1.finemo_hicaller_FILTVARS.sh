@@ -27,7 +27,7 @@ export PYTHONPATH=$CONDA_PREFIX/lib/python3.10/site-packages:$PYTHONPATH
 # Set PATH to prioritize conda binaries
 export PATH=$CONDA_PREFIX/bin:$PATH
 
-HOME_DIR=/gpfs/commons/home/mmatos
+HOME_DIR=/gchm
 OUTPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/motif_hit_calls/motifs_hits_FILTVARS
 
 mkdir -p $OUTPUT_DIR
