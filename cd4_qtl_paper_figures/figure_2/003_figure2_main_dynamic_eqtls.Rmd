@@ -1,0 +1,392 @@
+---
+title: "dynamic eQTLs"
+author: "Marliette Matos"
+output: html_notebook
+---
+
+
+```{r}
+library(dplyr)
+library(LaCroixColoR)
+library(ggplot2)
+library(Seurat)
+library(SingleCellExperiment)
+library(zellkonverter)
+library(reticulate)
+library(cowplot)
+setwd("~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025")
+options(bitmapType="cairo")
+source("~/cd4_qtl_paper_figures/utils/dynamic_mofa_plot_beta_helper.R")
+source("~/cd4_qtl_paper_figures/utils/qtl_violion_helper.R")
+
+```
+
+```{r}
+#read dynamic results
+dynamic_int<-read.csv("~/cd4_CellRegMap/002_interaction_analysis/results/results_01312025/res_34_5factors/2025_03_21_mofa_interaction_res34_significant_summary_fdr1.csv", row.names = 1)
+colnames(dynamic_int)<-c("phenotype_id", "n_snps", "chr", "pv_raw", "variant_id", "q_value")
+dynamic_int
+
+
+#read all betas
+betas_dyn <- list.files(
+  path    = "~/cd4_CellRegMap/002_interaction_analysis/results/results_01312025/res_34_5factors/beta_estimation/",
+  pattern = "*betaG.csv"
+)
+
+betas <- lapply(
+  paste0(
+    "~/cd4_CellRegMap/002_interaction_analysis/results/results_01312025/res_34_5factors/beta_estimation/",
+    betas_dyn
+  ),
+  readr::read_csv
+)
+
+betas_df <- do.call(rbind, betas)
+
+```
+```{r}
+library(readr)
+library(dplyr)
+
+# 1) Get all GxC files
+gx_files <- list.files(
+  path       = "~/cd4_CellRegMap/002_interaction_analysis/results/results_01312025/res_34_5factors/beta_estimation/",
+  pattern    = "GxC\\.csv$",
+  full.names = TRUE
+)
+
+# 2) For each file, compute range of the 2nd column
+ranges_list <- lapply(gx_files, function(f) {
+  df <- read_csv(f, show_col_types = FALSE)
+  
+  # second column
+  vals <- df[[2]]
+  vals <- as.numeric(vals)   # in case it's not already numeric
+  
+  data.frame(
+    file       = basename(f),
+    col2_min   = min(vals, na.rm = TRUE),
+    col2_max   = max(vals, na.rm = TRUE),
+    col2_range = max(vals, na.rm = TRUE) - min(vals, na.rm = TRUE),
+    stringsAsFactors = FALSE
+  )
+})
+
+# 3) Bind into one summary df
+ranges_df <- bind_rows(ranges_list)
+
+ranges_betas<-ranges_df %>% 
+  ggplot(aes(x = reorder(file, col2_range))) +
+  geom_linerange(aes(ymin = col2_min, ymax = col2_max)) +
+  coord_flip() +
+  labs(
+    x = "File",
+    y = "2nd column value",
+    title = "Min–Max of Dynammic BxC"
+  ) +
+  theme_bw() + theme(axis.text.y = element_blank(),
+                     axis.line.y = element_blank())
+
+ranges_betas
+```
+
+```{r}
+
+
+```
+
+```{r}
+#number of variants tested 
+dynamic_input<-read.csv("/gchm/cd4_CellRegMap/001_preprocessing/results_01312025/genotypes/cis_eQTLS_allcells_res34.csv")
+head(dynamic_input)
+
+#read eQTLs
+eQTL<-read.csv("~/cd4_QTL_analysis/03_Run_cisQTL_perchr/analysis/cis_eQTLs/summary_independent_allcells_independent_cis_qtl_pairs.csv")
+head(eQTL)
+
+```
+
+
+```{r}
+library(ggplot2)
+library(ggforce)  # For geom_circle
+
+# Get the actual sizes of your sets
+eqtl_size <- 9146
+top_eqtl_size <- 6939
+dyna_qtl_size <- 210
+
+# Calculate radii based on area to maintain proportions
+scale_factor <- 3 / sqrt(eqtl_size/pi)  # Scale to make largest circle radius 3
+
+# Calculate radii proportional to set sizes
+eqtl_radius <- sqrt(eqtl_size/pi) * scale_factor
+top_eqtl_radius <- sqrt(top_eqtl_size/pi) * scale_factor
+dyna_qtl_radius <- sqrt(dyna_qtl_size/pi) * scale_factor
+
+# Calculate valid offsets that keep inner circles entirely within outer circles
+max_top_offset <- eqtl_radius - top_eqtl_radius
+max_dyna_offset <- top_eqtl_radius - dyna_qtl_radius
+
+# Set offsets at 70% of maximum to ensure clear nesting
+top_offset_x <- max_top_offset * 0.7
+top_offset_y <- max_top_offset * 0.7
+dyna_offset_x <- max_dyna_offset * 0.7
+dyna_offset_y <- max_dyna_offset * 0.7
+
+# Create a data frame for the circles with offset centers
+circles <- data.frame(
+  x0 = c(0, top_offset_x, top_offset_x + dyna_offset_x),
+  y0 = c(0, top_offset_y, top_offset_y + dyna_offset_y),
+  r = c(eqtl_radius, top_eqtl_radius, dyna_qtl_radius),
+  set = c("eQTL", "eQTL tested", "dyna_QTL")
+)
+
+# Reorder the dataframe so the largest circle is drawn first (bottom layer)
+circles <- circles[order(circles$r, decreasing = TRUE), ]
+# Create the plot
+
+pal <- lacroix_palette("Lime", type = "discrete")
+
+p<-ggplot() +
+  # Draw largest circle first (bottom layer)
+  geom_circle(aes(x0 = circles$x0[1], y0 = circles$y0[1], r = circles$r[1]), 
+              fill = pal[[2]]) +
+  # Draw medium circle second (middle layer)
+  geom_circle(aes(x0 = circles$x0[2], y0 = circles$y0[2], r = circles$r[2]), 
+              fill = pal[[1]]) +
+  # Draw smallest circle last (top layer)
+  geom_circle(aes(x0 = circles$x0[3], y0 = circles$y0[3], r = circles$r[3]), 
+              fill = pal[[5]]) +
+  coord_fixed() +
+  theme_void() +
+  # Add size information as text directly on the circles
+  # eQTL label - position in visible green area
+  annotate("text", x = 0, y = -2.6, 
+           label = paste("eQTLs:", eqtl_size), hjust = 0.5, size = 10) +
+  # eQTLs Tested label - centered in the pink area
+  annotate("text", x = top_offset_x+0.2, y = top_offset_y, 
+           label = paste("eQTLs Tested:", top_eqtl_size), hjust = 0.5, size = 10) +
+  # Dynamic QTL label - positioned in bottom right of the pink area
+  annotate("text", x = top_offset_x + 0.03, y = top_offset_y + 1.5, 
+           label = paste("Dynamic QTLs:", dyna_qtl_size), hjust = 0.5, size = 10) 
+
+p
+
+pdf("plots_general/dynamic_eqtl_unjon_veen.pdf", height=6, width = 6)
+p
+dev.off()
+
+
+```
+| Gene (symbol)           | Why it matters for CD4 T cells                                                                                                           | Key literature          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| **ENTPD1 (CD39)**       | Ectonucleotidase marking exhausted & regulatory CD4 T cells; drives adenosine-mediated immunosuppression and is now a drug target.       | ([PMC][1])              |
+| **TNFRSF18 (GITR)**     | Co-stimulatory TNF-receptor constitutively high on Tregs and up-regulated on activated CD4 T cells; modulates tolerance and survival.    | ([NCBI][2])             |
+| **CD226 (DNAM-1)**      | Adhesion/co-stimulatory receptor; Th1-skewing marker, expressed on memory/effector CD4 T cells and Tr1 cells, counter-balanced by TIGIT. | ([Frontiers][3])        |
+| **IKZF1 (Ikaros)**      | Master TF that restrains pathogenic Th17-like polarization; loss causes aberrant CD4 T-cell gene programs.                               | ([PubMed][4])           |
+| **CCR2**                | Chemokine receptor guiding inflammatory CD4 T-cell recruitment to gut, CNS and other tissues; defines pathogenic CCR2⁺ Th subsets.       | ([PMC][5])              |
+| **IL32**                | Pro-/anti-inflammatory cytokine produced mainly by activated CD4 T cells; shapes downstream myeloid and T-cell responses.                | ([Frontiers][6])        |
+| **GIMAP4**              | GTPase that tunes apoptosis and Th1/Th2 differentiation kinetics in CD4 T cells.                                                         | ([PMC][7])              |
+| **BST2 (Tetherin)**     | Interferon-inducible restriction factor; its absence alters CD4 T-cell proliferation and exhaustion in chronic infection models.         | ([PMC][8])              |
+| **FCRL3**               | Surface marker on a dysfunctional human Treg subset; polymorphisms associate with auto-immunity via altered CD4⁺ Treg suppression.       | ([PMC][9])              |
+| **CD84 (SLAMF5)**       | SLAM-family receptor; limits or enhances CD4 T-cell activation depending on context (e.g., TB, leukemia micro-environment).              | ([PMC][10])             |
+| **LGALS3 (Galectin-3)** | Secreted lectin that cross-links TCR glycoproteins, dampening CD4 T-cell activation and shaping tumor/auto-immune responses.             | ([PMC][11])             |
+| **SKAP2**               | Cytosolic adaptor bridging TCR to integrin signalling; emerging regulator of cytokine production and motility in human T cells.          | ([PubMed][12])          |
+| **GZMM (Granzyme M)**   | Cytotoxic serine protease enriched in a subset of cytolytic CD4 T cells found in tumours and chronic infection.                          | ([PMC][13])             |
+| **TRGC2 & TRBV28**      | Encode γ-chain constant region and β-chain variable region of the TCR—by definition, core CD4/αβ T-cell components.                      | (T-cell receptor genes) |
+
+[1]: https://pmc.ncbi.nlm.nih.gov/articles/PMC8348030/ "
+            CD39 Regulation and Functions in T Cells - PMC
+        "
+[2]: https://www.ncbi.nlm.nih.gov/gene/8784 "TNFRSF18 TNF receptor superfamily member 18 [Homo sapiens (human)] - Gene - NCBI"
+[3]: https://www.frontiersin.org/journals/cell-and-developmental-biology/articles/10.3389/fcell.2020.00564/full "Frontiers | CD226: An Emerging Role in Immunologic Diseases"
+[4]: https://pubmed.ncbi.nlm.nih.gov/33893236/ "CD4+ T cells require Ikaros to inhibit their differentiation toward a pathogenic cell fate - PubMed"
+[5]: https://pmc.ncbi.nlm.nih.gov/articles/PMC1774196/?utm_source=chatgpt.com "CCR2 expressing CD4+ T lymphocytes are preferentially recruited ..."
+[6]: https://www.frontiersin.org/journals/immunology/articles/10.3389/fimmu.2024.1437224/full?utm_source=chatgpt.com "IL-2 and TCR stimulation induce expression and secretion of IL-32β ..."
+[7]: https://pmc.ncbi.nlm.nih.gov/articles/PMC3100574/?utm_source=chatgpt.com "GIMAP Proteins in T-Lymphocytes - PMC - PubMed Central"
+[8]: https://pmc.ncbi.nlm.nih.gov/articles/PMC6080785/ "
+            BST-2 controls T cell proliferation and exhaustion by shaping the early distribution of a persistent viral infection - PMC
+        "
+[9]: https://pmc.ncbi.nlm.nih.gov/articles/PMC2745186/?utm_source=chatgpt.com "Fc receptor-like 3 protein expressed on IL-2 non-responsive subset ..."
+[10]: https://pmc.ncbi.nlm.nih.gov/articles/PMC8865571/?utm_source=chatgpt.com "CD84 is a Suppressor of T and B Cell Activation during ..."
+[11]: https://pmc.ncbi.nlm.nih.gov/articles/PMC4390508/?utm_source=chatgpt.com "Galectin-3 shapes antitumor immune responses by suppressing ..."
+[12]: https://pubmed.ncbi.nlm.nih.gov/37893161/?utm_source=chatgpt.com "SKAP2-A Molecule at the Crossroads for Integrin Signalling and ..."
+[13]: https://pmc.ncbi.nlm.nih.gov/articles/PMC7909889/?utm_source=chatgpt.com "Tumor-specific cytolytic CD4 T cells mediate immunity against ..."
+
+```{r}
+library(Seurat)
+library(SingleCellExperiment)
+library(SeuratDisk) # For converting h5ad to h5seurat
+pseudocells=("/gchm/cd4_CellRegMap/001_preprocessing/results_01312025/prep_phenotype_vector/Data/pseudobulk_metacells/Pseudobulk_per_donor_all_cells_all_conditions_Leiden_res34.h5")
+sce = readH5AD(pseudocells)
+sce
+
+
+mofa = "/gchm/cd4_CellRegMap/001_preprocessing/results_01312025/mofa_factors/mofa_trained/cd4_aging_filt_sce_mofa_expectations_model_factors_res34.csv"
+
+df = read.csv(mofa, row.names = 1)
+head(df,2)
+
+rownames(df) = colnames(sce)
+head(df,2)
+
+#Add mofa factors as the PCA
+reducedDim(sce, "MOFA") <- df 
+head(reducedDim(sce))
+
+sce.seurat <- as.Seurat(sce, counts = "X", data = "X")
+```
+
+
+```{r}
+gene_name="IL32"
+index <- which(dynamic_int$phenotype_id == gene_name)
+
+gene <- dynamic_int$phenotype_id[index]
+chr  <- dynamic_int$chr[index]
+variant_id <- dynamic_int$variant_id[index]
+pos <- as.character(sub(".*:(\\d+)\\[b38\\].*", "\\1", variant_id))
+
+pt1<-plot_gene_mofa(gene, chr, pos, 
+              x_factor = "MOFA1", 
+              y_factor = "MOFA4",
+              nclus=10,
+              alpha = 0.9,
+              output_dir = "~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025/dynamic/")
+
+
+pt2<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(1, 4), features = c("CCR7"), pt.size = 1)
+pt3<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(1, 4), features = c("CCR10"), pt.size = 1)
+
+pt4<-plot_eqtl_violin_from_string(
+  gene           = gene_name,
+  variant_string = variant_id,
+  celltype       = "allcells"
+)
+
+
+state<-plot_grid(pt2, pt3, ncol=1)
+
+p<-plot_grid(state, pt1, pt4, rel_widths = c(1,1.5, 1), ncol=3)
+p
+```
+
+
+```{r}
+gene_name="IKZF1"
+index <- which(dynamic_int$phenotype_id == gene_name)
+
+gene <- dynamic_int$phenotype_id[index]
+chr  <- dynamic_int$chr[index]
+variant_id <- dynamic_int$variant_id[index]
+pos <- as.character(sub(".*:(\\d+)\\[b38\\].*", "\\1", variant_id))
+
+pt1<-plot_gene_mofa(gene, chr, pos, 
+              x_factor = "MOFA3", 
+              y_factor = "MOFA1",
+              nclus=10,
+              alpha = 0.9,
+              output_dir = "~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025/dynamic/")
+
+
+pt2<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(3, 1), features = c("CCR7"), pt.size = 1)
+pt3<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(3, 1), features = c("KLRG1"), pt.size = 1)
+
+pt4<-plot_eqtl_violin_from_string(
+  gene           = gene_name,
+  variant_string = variant_id,
+  celltype       = "allcells"
+)
+
+
+state<-plot_grid(pt2, pt3, ncol=1)
+
+p<-plot_grid(state, pt1, pt4, rel_widths = c(1,1.5, 1), ncol=3)
+p
+
+ggsave(paste0("~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025/dynamic/dynamic_", gene_name, "_mofa1_2.pdf"), p, height = 15, width = 35, units = "cm", dpi = 300)
+
+```
+
+```{r}
+gene_name="BACH1"
+index <- which(dynamic_int$phenotype_id == gene_name)
+
+gene <- dynamic_int$phenotype_id[index]
+chr  <- dynamic_int$chr[index]
+variant_id <- dynamic_int$variant_id[index]
+pos <- as.character(sub(".*:(\\d+)\\[b38\\].*", "\\1", variant_id))
+
+pt1<-plot_gene_mofa(gene, chr, pos, 
+              x_factor = "MOFA1", 
+              y_factor = "MOFA2",
+              nclus=10,
+              alpha = 0.9,
+              output_dir = "~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025/dynamic/")
+
+
+pt2<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(1, 2), features = c("CCR7"), pt.size = 1)
+pt3<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(1, 2), features = c("CCR10"), pt.size = 1)
+
+pt4<-plot_eqtl_violin_from_string(
+  gene           = gene_name,
+  variant_string = variant_id,
+  celltype       = "allcells"
+)
+
+
+state<-plot_grid(pt2, pt3, ncol=1)
+
+p<-plot_grid(state, pt1, pt4, rel_widths = c(1,1.5, 1), ncol=3)
+p
+
+ggsave(paste0("~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025/dynamic/dynamic_", gene_name, "_mofa1_2.pdf"), p, height = 15, width = 35, units = "cm", dpi = 300)
+```
+
+
+```{r}
+gene_name="GZMM"
+index <- which(dynamic_int$phenotype_id == gene_name)
+
+gene <- dynamic_int$phenotype_id[index]
+chr  <- dynamic_int$chr[index]
+variant_id <- dynamic_int$variant_id[index]
+pos <- as.character(sub(".*:(\\d+)\\[b38\\].*", "\\1", variant_id))
+
+pt1<-plot_gene_mofa(gene, chr, pos, 
+              x_factor = "MOFA3", 
+              y_factor = "MOFA4",
+              nclus=10,
+              alpha = 0.9,
+              output_dir = "~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025/dynamic/")
+
+
+pt2<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(3, 4), features = c("CCL4"), pt.size = 1)
+pt3<-FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(3, 4), features = c("MX1"), pt.size = 1)
+
+pt4<-plot_eqtl_violin_from_string(
+  gene           = gene_name,
+  variant_string = variant_id,
+  celltype       = "allcells"
+)
+
+
+state<-plot_grid(pt2, pt3, ncol=1)
+
+p<-plot_grid(state, pt1, pt4, rel_widths = c(1,1.5, 1), ncol=3)
+p
+
+ggsave(paste0("~/cd4_qtl_paper_figures/figure_1/plotting/plots_oct2025/dynamic/dynamic_", gene_name, "_mofa1_2.pdf"), p, height = 15, width = 35, units = "cm", dpi = 300)
+```
+
+
+MOFA Gene loading Explanations
+```{r}
+FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(1, 2), features = c("CCR10"), pt.size = 1)
+FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(1, 2), features = c("CCL4"), pt.size = 1)
+
+FeaturePlot(sce.seurat, reduction = "MOFA", dims = c(3, 4), features = c("MX1"), pt.size = 1)
+```
+

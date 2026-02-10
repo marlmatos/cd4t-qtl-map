@@ -17,6 +17,7 @@
 **/chrombpnet_utils/**
 **/plots/
 **/input/
+**figure_2_archive/
 
 ##hide files
 *track_helpers_BL.R
