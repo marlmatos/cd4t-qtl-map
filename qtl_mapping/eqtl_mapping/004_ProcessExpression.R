@@ -1,7 +1,7 @@
 ########################################################
 # Process scRNA-seq data for tensorQTL
-# Author: Winona Oliveros
-# Adapted by: Marliette Matos
+# Author: Angli XUE
+# Adapted by: Winona Oliveros & Marliette Matos
 ################################################
 
 #library(here)

@@ -13,7 +13,7 @@
 #####
 
 # Libraries
-.libPaths("/gpfs/commons/home/mmatos/R/x86_64-pc-linux-gnu-library")
+.libPaths("/gchm/R/x86_64-pc-linux-gnu-library")
 library(edgeR)
 library(DESeq2)
 library(matrixStats)
@@ -23,16 +23,16 @@ library(GenomicAlignments)
 set.seed(2024)
 
 # Directories
-root_dir <- "/gpfs/commons/home/mmatos/scRNAseq/002_seurat_preprocessing/analysis/004_creating_seurat_objects_filtered_annotated/"
-out_dir <- "/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/001_peaks/"
+root_dir <- "/gchm/scRNAseq/002_seurat_preprocessing/analysis/004_creating_seurat_objects_filtered_annotated/"
+out_dir <- "/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/001_peaks/"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 
 ##
 ##--------Read Phenotype data tables 
 ## Paths
-peaks_counts <- "/gpfs/commons/home/mmatos/ATAC-seq_analysis/diff_accesibility_ana/results/peak_counts/RAW_cd4_atac_peakcounts_ranges_scrna_union.csv"
-peak_metadata <- "/gpfs/commons/home/mmatos/ATAC-seq_analysis/diff_accesibility_ana/results/metadata/cd4_atac_metadata_scrna_union.csv"
+peaks_counts <- "/gchm/ATAC-seq_analysis/diff_accesibility_ana/results/peak_counts/RAW_cd4_atac_peakcounts_ranges_scrna_union.csv"
+peak_metadata <- "/gchm/ATAC-seq_analysis/diff_accesibility_ana/results/metadata/cd4_atac_metadata_scrna_union.csv"
 
 ## Read data
 peak_metadata <- read.csv(peak_metadata, row.names = 1)
@@ -66,7 +66,7 @@ sn <- ranges.table_filtered$Chr
 start <- as.numeric(ranges.table_filtered$Start)
 end <- as.numeric(ranges.table_filtered$End)
 gr <- GRanges(seqnames=sn, ranges=IRanges(start, end), strand="*", mcols=data.frame(peakID=rn))
-ff <- FaFile("/gpfs/commons/home/mmatos/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa")
+ff <- FaFile("/gchm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa")
 
 
 peakSeqs <- getSeq(x=ff, gr)
@@ -97,7 +97,7 @@ cpmqsmooth <- edgeR::cpm(qsmooth_matrix,
                          prior.count=0.25)
 
 # Read WGS samples
-wgs_samples <- read.delim("/gpfs/commons/home/mmatos/cd4_QTL_analysis/01_genotype_snps_covar/02_genotype_covariates/analysis/002.v4_calculating_pcs_MAF5/CD4_all_chr_ashkenazi.364.AF1.QC.BA.king2.hwe.annot.fam", header = F)
+wgs_samples <- read.delim("/gchm/cd4_QTL_analysis/01_genotype_snps_covar/02_genotype_covariates/analysis/002.v4_calculating_pcs_MAF5/CD4_all_chr_ashkenazi.364.AF1.QC.BA.king2.hwe.annot.fam", header = F)
 wgs_samples <- wgs_samples$V2
 
 # Filter samples

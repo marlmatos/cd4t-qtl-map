@@ -9,7 +9,7 @@
 #SBATCH --time=24:00:00             # Wall time limit (days-hrs:min:sec)
 #SBATCH --output=logs/005_change_var_names.out    # Path to the standard output and error files relative to the working
 
-OUTDIR="/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/004_genotypes/plink"
+OUTDIR="/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/004_genotypes/plink"
 
 module load miniconda3/3.22.0
 source activate genomic_tools #preinstall jupyter in the conda environment in which your job will be conducted

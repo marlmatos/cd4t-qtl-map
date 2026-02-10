@@ -11,12 +11,12 @@
 module load miniconda3/3.22.0
 source activate genomic_tools #preinstall jupyter in the conda environment in which your job will be conducted
 
-plink_file="/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_101424_cpm_tmm_maf5_fdr5_50kb/results/004_genotypes/plink/CD4_all_chr_ashkenazi.362.AF1.QC.BA.king2.hwe.annot"  #this big plink file is the result of concatenating all preprocessed chr_vcfs from Sam's genotyping analysis
+plink_file="/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_101424_cpm_tmm_maf5_fdr5_50kb/results/004_genotypes/plink/CD4_all_chr_ashkenazi.362.AF1.QC.BA.king2.hwe.annot"  #this big plink file is the result of concatenating all preprocessed chr_vcfs from Sam's genotyping analysis
 #sam's analysis can be found at /gpfs/commons/groups/lappalainen_lab/mmatos/cd4_aging_project/data/LowPass_WGS/03.27.24_SamGhatan_QC/ashkenazi_vcf
 #this file has gone through various phases of QC for whioch samples were removed from the original dataset, based on outliers and common samples between WGS and GEX 
 
 
-OUTDIR="/gpfs/commons/home/mmatos/cd4_caQTL_analysis/variant_to_peak_QTL/run_101424_cpm_tmm_maf5_fdr5_50kb/results/004_genotypes/plink"
+OUTDIR="/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_101424_cpm_tmm_maf5_fdr5_50kb/results/004_genotypes/plink"
 
 mkdir -p $OUTDIR/per_chr_plink_files
 
