@@ -38,3 +38,6 @@
 *-checkpoint.sh
 *-checkpoint.py
 *.pyc
+*.csv
+*.gtf.gz
+*.svg
