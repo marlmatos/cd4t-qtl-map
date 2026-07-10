@@ -1,0 +1,2319 @@
+---
+title: "Figure_1"
+author: Marliette Matos
+output: html_notebook
+---
+
+
+```{r}
+source("config.local.R")
+source(paths_figure1$color_pallete_helper)
+
+.libPaths(c(
+  r_lib_path_44,
+  "/nfs/sw/easybuild/software/R/4.4.1-gfbf-2023b/lib/R/library"
+))
+options(bitmapType = "cairo")
+
+suppressPackageStartupMessages({
+  library(data.table)
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(cowplot)
+  library(scales)
+  library(GenomicRanges)
+  library(rcartocolor)
+  library(tidyr)
+  library(stringr)
+  library(igraph)
+  library(forcats)
+  library(purrr)
+  library(IRanges)
+  library(patchwork)
+  library(grid)     # unit()
+  library(readr)
+  library(rtracklayer)
+  library(S4Vectors)
+  library(GenomicFeatures)
+  library(VariantAnnotation)
+})
+
+```
+
+```{r Figure-1B}
+# -----------------------------
+# eQTL SuSiE fine-mapping only
+# -----------------------------
+
+per_chr_eqtl <- vector("list", 22)
+
+for (i in 1:22) {
+  f_fm <- sprintf(paths_figure1$eqtl_credible_sets_template, i)
+  
+  
+  fm_raw <- fread(f_fm)
+  
+  fm_raw <- fm_raw %>%
+    mutate(
+      chr = paste0("chr", i),
+      credible_set_id = paste(region, gene, cs, sep = "_")
+    )
+  
+  per_chr_eqtl[[i]] <- data.frame(
+    chr = paste0("chr", i),
+    n_qtls = n_distinct(fm_raw$credible_set_id),
+    n_phenotypes = n_distinct(fm_raw$gene)
+  )
+}
+
+eqtl_per_chr_df <- bind_rows(per_chr_eqtl) %>%
+  arrange(chr)
+
+print(eqtl_per_chr_df)
+
+eqtl_summary <- eqtl_per_chr_df %>%
+  summarise(
+    total = sum(n_qtls),
+    n_phenotypes = n_distinct(unlist(lapply(1:22, function(i) {
+      f_fm <- sprintf(paths_figure1$eqtl_credible_sets_template, i)
+      
+      fread(f_fm)$gene
+    })))
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "unit",
+    values_to = "count"
+  ) %>%
+  mutate(
+    type = if_else(unit == "n_phenotypes", "eGenes", "cis-eQTLs"),
+    type2 = "cis-eQTLs"
+  )
+
+cat(
+  "**SuSiE fine-mapped eQTL summary**\n",
+  "TOTAL fine-mapped eQTL credible sets: ", eqtl_summary$count[eqtl_summary$unit == "total"], "\n",
+  "TOTAL fine-mapped eGenes: ", eqtl_summary$count[eqtl_summary$unit == "n_phenotypes"], "\n",
+  sep = ""
+)
+
+# -----------------------------
+# caQTL SuSiE fine-mapping only
+# -----------------------------
+
+per_chr_caqtl <- vector("list", 22)
+
+for (i in 1:22) {
+  
+  f_fm  <- sprintf(paths_figure1$caqtl_credible_sets_template, i)
+  
+  
+  fm_raw <- fread(f_fm)
+  
+  if (!"variant_id" %in% names(fm_raw) && "snp" %in% names(fm_raw)) {
+    setnames(fm_raw, "snp", "variant_id")
+  }
+  
+  if (!"peak" %in% names(fm_raw) && "peak_id" %in% names(fm_raw)) {
+    setnames(fm_raw, "peak_id", "peak")
+  }
+  
+  fm_raw <- fm_raw %>%
+    mutate(
+      chr = paste0("chr", i),
+      credible_set_id = paste(region, peak, cs, sep = "_")
+    )
+  
+  per_chr_caqtl[[i]] <- data.frame(
+    chr = paste0("chr", i),
+    n_qtls = n_distinct(fm_raw$credible_set_id),
+    n_phenotypes = n_distinct(fm_raw$peak)
+  )
+}
+
+caqtl_per_chr_df <- bind_rows(per_chr_caqtl) %>%
+  arrange(chr)
+
+print(caqtl_per_chr_df)
+
+caqtl_summary <- caqtl_per_chr_df %>%
+  summarise(
+    total = sum(n_qtls),
+    n_phenotypes = n_distinct(unlist(lapply(1:22, function(i) {
+      f_fm  <- sprintf(paths_figure1$caqtl_credible_sets_template, i)
+      
+      fm <- fread(f_fm)
+      
+      if (!"peak" %in% names(fm) && "peak_id" %in% names(fm)) {
+        setnames(fm, "peak_id", "peak")
+      }
+      
+      fm$peak
+    })))
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "unit",
+    values_to = "count"
+  ) %>%
+  mutate(
+    type = if_else(unit == "n_phenotypes", "caPeaks", "cis-caQTLs"),
+    type2 = "cis-caQTLs"
+  )
+
+cat(
+  "**SuSiE fine-mapped caQTL summary**\n",
+  "TOTAL fine-mapped caQTL credible sets: ", caqtl_summary$count[caqtl_summary$unit == "total"], "\n",
+  "TOTAL fine-mapped caPeaks: ", caqtl_summary$count[caqtl_summary$unit == "n_phenotypes"], "\n",
+  sep = ""
+)
+
+
+summary_all <- bind_rows(eqtl_summary, caqtl_summary)
+
+summary_all
+
+# -----------------------------
+# eQTL plot: SuSiE only
+# -----------------------------
+
+df_eqtl <- summary_all %>%
+  filter(type2 == "cis-eQTLs") %>%
+  mutate(
+    unit_disp = recode(
+      unit,
+      "total" = "eQTL credible sets",
+      "n_phenotypes" = "eGenes"
+    ),
+    unit_disp = factor(unit_disp, levels = c("eGenes", "eQTL credible sets"))
+  )
+
+p1 <- ggplot(df_eqtl, aes(y = unit_disp, x = count, fill = unit_disp)) +
+  geom_col(width = 0.8, color = "gray20") +
+  geom_text(
+    aes(label = comma(count)),
+    hjust = -0.15,
+    color = "gray20",
+    size = 5
+  ) +
+  scale_fill_manual(
+    values = c(
+      "eQTL credible sets" = "#C70E7B",
+      "eGenes" = "#EFC7E6"
+    ),
+    guide = "none"
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.01, 0.15))) +
+  labs(
+    title = "SuSiE fine-mapped cis-eQTLs",
+    x = "Count",
+    y = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12)
+  )
+# -----------------------------
+# caQTL plot: SuSiE only
+# -----------------------------
+
+df_caqtl <- summary_all %>%
+  filter(type2 == "cis-caQTLs") %>%
+  mutate(
+    unit_disp = recode(
+      unit,
+      "total" = "caQTL credible sets",
+      "n_phenotypes" = "caPeaks"
+    ),
+    unit_disp = factor(unit_disp, levels = c("caPeaks", "caQTL credible sets"))
+  )
+
+p2 <- ggplot(df_caqtl, aes(y = unit_disp, x = count, fill = unit_disp)) +
+  geom_col(width = 0.8, color = "gray20") +
+  geom_text(
+    aes(label = comma(count)),
+    hjust = -0.15,
+    color = "gray20",
+    size = 5
+  ) +
+  scale_fill_manual(
+    values = c(
+      "caQTL credible sets" = "#9ccb86",
+      "caPeaks" = "#B4D9CC"
+    ),
+    guide = "none"
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.01, 0.15))) +
+  labs(
+    title = "SuSiE fine-mapped cis-caQTLs",
+    x = "Count",
+    y = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12)
+  )
+
+qtl.plt <- plot_grid(
+  ggdraw() + draw_plot(p1, x = 0, y = 0, width = 0.80, height = 1),
+  ggdraw() + draw_plot(p2, x = 0, y = 0, width = 1.00, height = 1),
+  ncol = 1
+)
+
+qtl.plt
+```
+
+```{r Figure-1C}
+summary_df<-fread(paths_figure1$summary_df)
+
+#simplifying caQTL categories
+summary_df <- summary_df %>%
+  mutate(
+    caqtl_category = ifelse(
+      cs_type_any_var %in% c("in_corr_Peak", "in_other_Peak"),
+      "in_other_Peak",
+      cs_type_any_var
+    )
+  )
+
+##plot caqtl categories breakdown
+label_map <- c(
+  in_caPeak = "Within caQTL peak",
+  in_other_Peak = "In other open peak",
+  no_Peak_overlap = "No peak overlap"
+)
+
+# Plot with custom fill scale
+
+plot_df<-summary_df %>% 
+  filter(coloc_status %in% c("coloc", "caQTL_only")) %>% 
+  group_by(caqtl_category) %>%
+  summarise(n = n_distinct(finemapped_cs)) %>%
+  mutate(unit = "caQTLs",
+         pct = n / sum(n) * 100) 
+
+fwrite(plot_df, paths_figure1$caqtl_categories_pct)
+
+#plot_df<-fread(paths_figure1$caqtl_categories_pct)
+stack_plot<-ggplot(plot_df, aes(x = unit, y = pct, fill = caqtl_category)) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(
+    aes(label = n),
+    position = position_stack(vjust = 0.5),
+    color = "black",
+    size = 3
+  ) +
+  scale_fill_manual(
+    values = caQTL_category_cmap2,
+    labels = label_map,
+    name = "Category"
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(scale = 1),   # keep axis as percent
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = "caQTL Categories",
+    x = NULL,
+    y = "Percent"
+  ) +
+  theme_minimal()
+stack_plot
+```
+
+
+```{r figure-1D, message=FALSE, warning=FALSE, fig.width=8, fig.height=3}
+# Figure 1D: Distance from fine-mapped QTL credible sets to target features
+
+
+# ------------------------------------------------------------------------------
+# Input files
+# ------------------------------------------------------------------------------
+
+summary_path <- paths_figure1$summary_path
+
+gencode_bed_path <- paths_figure1$gencode_bed_path
+
+peak_path <- paths_figure1$peak_path
+
+# ------------------------------------------------------------------------------
+# Analysis parameters
+# ------------------------------------------------------------------------------
+
+cs_size_quantile <- 0.75
+
+distance_breaks <- c(0, 5e3, 10e3, 50e3, Inf)
+distance_labels <- c("0–5 kb", "5–10 kb", "10–50 kb", "50 kb+")
+
+# Reverse order controls the stacked-bar and legend order.
+distance_levels <- rev(distance_labels)
+
+caqtl_category_levels <- c(
+  "no_Peak_overlap",
+  "in_other_Peak",
+  "in_caPeak"
+)
+
+plot_group_levels <- c(
+  "eQTL",
+  caqtl_category_levels
+)
+
+# ------------------------------------------------------------------------------
+# Helper functions
+# ------------------------------------------------------------------------------
+
+# Retain credible sets with sizes at or below the specified quantile.
+filter_credible_sets_by_size <- function(
+    data,
+    credible_set_column,
+    variant_column,
+    quantile_cutoff = 0.75
+) {
+  required_columns <- c(
+    credible_set_column,
+    variant_column
+  )
+
+  missing_columns <- setdiff(
+    required_columns,
+    names(data)
+  )
+
+  if (length(missing_columns) > 0) {
+    stop(
+      "Missing required columns: ",
+      paste(missing_columns, collapse = ", ")
+    )
+  }
+
+  credible_set_sizes <- data %>%
+    dplyr::filter(
+      !is.na(.data[[credible_set_column]]),
+      !is.na(.data[[variant_column]])
+    ) %>%
+    dplyr::distinct(
+      .data[[credible_set_column]],
+      .data[[variant_column]]
+    ) %>%
+    dplyr::group_by(
+      .data[[credible_set_column]]
+    ) %>%
+    dplyr::summarise(
+      n_variants = dplyr::n(),
+      .groups = "drop"
+    )
+
+  maximum_size <- stats::quantile(
+    credible_set_sizes$n_variants,
+    probs = quantile_cutoff,
+    na.rm = TRUE,
+    names = FALSE
+  )
+
+  retained_sets <- credible_set_sizes %>%
+    dplyr::filter(
+      n_variants <= maximum_size
+    ) %>%
+    dplyr::select(
+      dplyr::all_of(credible_set_column)
+    )
+
+  filtered_data <- data %>%
+    dplyr::semi_join(
+      retained_sets,
+      by = credible_set_column
+    )
+
+  list(
+    data = filtered_data,
+    credible_set_sizes = credible_set_sizes,
+    maximum_size = maximum_size
+  )
+}
+
+
+bin_distances <- function(distance) {
+  cut(
+    distance,
+    breaks = distance_breaks,
+    labels = distance_labels,
+    include.lowest = TRUE,
+    right = FALSE
+  )
+}
+
+# ------------------------------------------------------------------------------
+# Load fine-mapping and colocalization results
+# ------------------------------------------------------------------------------
+
+qtl_summary <- fread(summary_path, showProgress = FALSE) %>%
+  as_tibble()
+
+eqtl_data <- qtl_summary %>%
+  filter(coloc_status %in% c("coloc", "eQTL_only")) %>%
+  filter_credible_sets_by_size(
+    credible_set_column = "finemapped_cs_eqtl",
+    variant_column = "variant_id.y",
+    quantile_cutoff = cs_size_quantile
+  )
+
+caqtl_data <- qtl_summary %>%
+  filter(coloc_status %in% c("coloc", "caQTL_only")) %>%
+  filter_credible_sets_by_size(
+    credible_set_column = "finemapped_cs_caqtl",
+    variant_column = "variant_id.x",
+    quantile_cutoff = cs_size_quantile
+  )
+
+# ------------------------------------------------------------------------------
+# Calculate mean eQTL credible-set distance to the eGene TSS
+# ------------------------------------------------------------------------------
+
+gencode_bed <- fread(
+  gencode_bed_path,
+  sep = "\t",
+  header = FALSE,
+  showProgress = FALSE
+)
+
+bed_column_names <- c(
+  "chr",
+  "start_0based",
+  "end",
+  "gene",
+  "score",
+  "strand"
+)
+
+setnames(
+  gencode_bed,
+  old = names(gencode_bed)[seq_len(min(6, ncol(gencode_bed)))],
+  new = bed_column_names[seq_len(min(6, ncol(gencode_bed)))]
+)
+
+if (!"strand" %in% names(gencode_bed)) {
+  gencode_bed[, strand := "*"]
+}
+
+gene_tss <- gencode_bed %>%
+  transmute(
+    chr = as.character(chr),
+    gene = as.character(gene),
+    strand = as.character(strand),
+    start = as.integer(start_0based) + 1L,
+    end = as.integer(end),
+    tss = if_else(strand == "+", start, end)
+  ) %>%
+  filter(str_detect(chr, "^chr(\\d+|X|Y)$")) %>%
+  group_by(gene, chr) %>%
+  slice_max(
+    order_by = end - start,
+    n = 1,
+    with_ties = FALSE
+  ) %>%
+  ungroup() %>%
+  distinct(gene, .keep_all = TRUE)
+
+eqtl_counts <- eqtl_data$data %>%
+  dplyr::select(
+    gene,
+    credible_set = finemapped_cs_eqtl,
+    variant_chr = chr.y,
+    variant_position = variant_pos.y
+  ) %>%
+  dplyr::filter(
+    !is.na(credible_set),
+    !is.na(gene),
+    !is.na(variant_chr),
+    !is.na(variant_position)
+  ) %>%
+  dplyr::distinct() %>%
+  dplyr::inner_join(
+    gene_tss %>%
+      dplyr::select(
+        gene,
+        tss_chr = chr,
+        tss
+      ),
+    by = "gene"
+  ) %>%
+  dplyr::filter(variant_chr == tss_chr) %>%
+  dplyr::mutate(
+    distance_to_tss = abs(variant_position - tss)
+  ) %>%
+  dplyr::group_by(credible_set) %>%
+  dplyr::summarise(
+    mean_distance = mean(distance_to_tss),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    group = "eQTL",
+    distance_bin = bin_distances(mean_distance)
+  ) %>%
+  dplyr::filter(!is.na(distance_bin)) %>%
+  dplyr::count(
+    group,
+    distance_bin,
+    name = "n"
+  )
+
+# ------------------------------------------------------------------------------
+# Calculate mean caQTL credible-set distance to the caPeak center
+# ------------------------------------------------------------------------------
+
+peak_raw <- fread(
+  peak_path,
+  showProgress = FALSE
+) %>%
+  as_tibble()
+
+peak_coordinates <- peak_raw %>%
+  transmute(
+    peak = as.character(.data[[names(peak_raw)[1]]]),
+    peak_chr = as.character(Chr),
+    peak_start = as.numeric(Start),
+    peak_end = as.numeric(End)
+  ) %>%
+  filter(peak_chr %in% paste0("chr", 1:22)) %>%
+  mutate(
+    peak_center = peak_start + (peak_end - peak_start) / 2
+  )
+
+caqtl_counts <- caqtl_data$data %>%
+  dplyr::transmute(
+    credible_set = finemapped_cs_caqtl,
+    peak,
+    variant = variant_id.x,
+    variant_chr = chr.x,
+    variant_position = variant_pos.x,
+    group = caqtl_category
+  ) %>%
+  dplyr::filter(
+    !is.na(credible_set),
+    !is.na(peak),
+    !is.na(variant),
+    !is.na(variant_chr),
+    !is.na(variant_position),
+    !is.na(group)
+  ) %>%
+  dplyr::distinct() %>%
+  dplyr::inner_join(
+    peak_coordinates,
+    by = "peak"
+  ) %>%
+  dplyr::filter(
+    variant_chr == peak_chr
+  ) %>%
+  dplyr::mutate(
+    distance_to_peak = abs(
+      variant_position - peak_center
+    )
+  ) %>%
+  dplyr::group_by(
+    credible_set,
+    group
+  ) %>%
+  dplyr::summarise(
+    mean_distance = mean(
+      distance_to_peak,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    distance_bin = bin_distances(mean_distance)
+  ) %>%
+  dplyr::filter(
+    !is.na(distance_bin)
+  ) %>%
+  dplyr::count(
+    group,
+    distance_bin,
+    name = "n"
+  )
+# ------------------------------------------------------------------------------
+# Combine results and plot
+# ------------------------------------------------------------------------------
+
+plot_data <- bind_rows(eqtl_counts, caqtl_counts) %>%
+  mutate(
+    group = factor(group, levels = plot_group_levels),
+    distance_bin = factor(
+      distance_bin,
+      levels = distance_levels
+    )
+  ) %>%
+  complete(
+    group,
+    distance_bin,
+    fill = list(n = 0L)
+  )
+
+figure_1c <- ggplot(
+  plot_data,
+  aes(
+    x = group,
+    y = n,
+    fill = distance_bin
+  )
+) +
+  geom_col(
+    position = "fill",
+    width = 0.7,
+    color = "grey20",
+    linewidth = 0.2
+  ) +
+  scale_y_continuous(
+    labels = label_percent(accuracy = 1),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Proportion of credible sets",
+    fill = "Mean distance",
+    title = "Mean distance to eGene TSS or caPeak center",
+    subtitle = "Credible sets at or below the 75th percentile of credible-set size"
+  ) +
+  theme_minimal(base_size = 12)
+
+figure_1c
+```
+
+```{r figure-1E, message=FALSE, warning=FALSE, fig.width=14, fig.height=5}
+# Figure 1E: Number of targets per locus
+
+# ------------------------------------------------------------------------------
+# Analysis parameters
+# ------------------------------------------------------------------------------
+
+credible_set_quantile <- 0.75
+jaccard_threshold <- 0.30
+
+target_breaks <- c(1, 2, 11, Inf)
+target_labels <- c("1", "2–10", "11+")
+
+# ------------------------------------------------------------------------------
+# Plotting functions
+# ------------------------------------------------------------------------------
+
+plot_credible_set_sizes <- function(
+    credible_set_sizes,
+    x_max = 100,
+    bin_width = 5,
+    x_label = "Number of variants per credible set"
+) {
+  plot_data <- credible_set_sizes %>%
+    filter(
+      !is.na(n_variants),
+      is.finite(n_variants)
+    )
+
+  size_summary <- summary(plot_data$n_variants)
+
+  summary_label <- paste0(
+    "N CS = ", comma(nrow(plot_data)), "\n",
+    "Min = ", size_summary[["Min."]], "\n",
+    "Q1 = ", size_summary[["1st Qu."]], "\n",
+    "Median = ", size_summary[["Median"]], "\n",
+    "Mean = ", round(mean(plot_data$n_variants), 2), "\n",
+    "Q3 = ", size_summary[["3rd Qu."]], "\n",
+    "Max = ", size_summary[["Max."]]
+  )
+
+  ggplot(plot_data, aes(x = n_variants)) +
+    geom_histogram(
+      binwidth = bin_width,
+      boundary = 0,
+      closed = "left"
+    ) +
+    geom_vline(
+      xintercept = median(plot_data$n_variants),
+      linetype = "dashed"
+    ) +
+    geom_vline(
+      xintercept = mean(plot_data$n_variants),
+      linetype = "dotted"
+    ) +
+    annotate(
+      geom = "label",
+      x = x_max * 0.65,
+      y = Inf,
+      label = summary_label,
+      hjust = 0,
+      vjust = 1.1,
+      linewidth = 0.2
+    ) +
+    coord_cartesian(xlim = c(1, x_max)) +
+    labs(
+      x = x_label,
+      y = "Number of credible sets"
+    ) +
+    theme_classic()
+}
+
+
+plot_jaccard_distribution <- function(
+    jaccard_data,
+    bin_width = 0.02,
+    title = "Jaccard overlap between credible-set intervals"
+) {
+  ggplot(jaccard_data, aes(x = jaccard)) +
+    geom_histogram(
+      binwidth = bin_width,
+      boundary = 0,
+      closed = "left"
+    ) +
+    scale_x_continuous(
+      limits = c(0, 1),
+      breaks = seq(0, 1, 0.1)
+    ) +
+    labs(
+      x = "Jaccard index",
+      y = "Number of credible-set pairs",
+      title = title
+    ) +
+    theme_classic()
+}
+
+
+plot_target_distribution <- function(
+    binned_data,
+    title = "Targets per locus"
+) {
+  plot_data <- binned_data %>%
+    group_by(qtl_type) %>%
+    mutate(
+      proportion = n / sum(n),
+      percent_label = percent(proportion, accuracy = 0.1)
+    ) %>%
+    ungroup()
+
+  ggplot(
+    plot_data,
+    aes(
+      x = qtl_type,
+      y = n,
+      fill = target_bin
+    )
+  ) +
+    geom_col(
+      position = "fill",
+      width = 0.7,
+      color = "grey20",
+      linewidth = 0.2
+    ) +
+    geom_text(
+      aes(
+        label = if_else(
+          proportion > 0.02,
+          percent_label,
+          ""
+        )
+      ),
+      position = position_fill(vjust = 0.5),
+      size = 3
+    ) +
+    scale_y_continuous(
+      labels = label_percent(accuracy = 1),
+      expand = expansion(mult = c(0, 0))
+    ) +
+    coord_flip() +
+    labs(
+      x = NULL,
+      y = "Proportion of loci",
+      fill = NULL,
+      title = title
+    ) +
+    theme_minimal(base_size = 12)
+}
+
+# ------------------------------------------------------------------------------
+# Analyze one QTL type
+# ------------------------------------------------------------------------------
+
+analyze_qtl_loci <- function(
+    data,
+    qtl_type,
+    credible_set_column,
+    target_column,
+    chromosome_column,
+    position_column,
+    size_quantile = 0.75,
+    jaccard_threshold = 0.30,
+    target_breaks = c(1, 2, 11, Inf),
+    target_labels = c("1", "2–10", "11+"),
+    histogram_x_max = 100,
+    histogram_bin_width = 5
+) {
+  stopifnot(
+    length(target_breaks) == length(target_labels) + 1,
+    size_quantile > 0,
+    size_quantile <= 1,
+    jaccard_threshold >= 0,
+    jaccard_threshold <= 1
+  )
+
+  required_columns <- c(
+    credible_set_column,
+    target_column,
+    chromosome_column,
+    position_column
+  )
+
+  missing_columns <- setdiff(required_columns, names(data))
+
+  if (length(missing_columns) > 0) {
+    stop(
+      "Missing required columns: ",
+      paste(missing_columns, collapse = ", ")
+    )
+  }
+
+  # --------------------------------------------------------------------------
+  # Standardize input columns
+  # --------------------------------------------------------------------------
+
+  qtl_data <- data %>%
+    dplyr::transmute(
+      credible_set = as.character(.data[[credible_set_column]]),
+      target = as.character(.data[[target_column]]),
+      chromosome = as.character(.data[[chromosome_column]]),
+      position = as.integer(.data[[position_column]])
+    ) %>%
+    dplyr::filter(
+      !is.na(credible_set),
+      credible_set != "",
+      !is.na(target),
+      target != "",
+      !is.na(chromosome),
+      chromosome != "",
+      !is.na(position)
+    ) %>%
+    dplyr::distinct()
+
+  if (nrow(qtl_data) == 0) {
+    stop("No valid QTL records remained after filtering missing values.")
+  }
+
+  # --------------------------------------------------------------------------
+  # Credible-set size filtering
+  # --------------------------------------------------------------------------
+
+  credible_set_sizes <- qtl_data %>%
+    dplyr::distinct(
+      credible_set,
+      chromosome,
+      position
+    ) %>%
+    dplyr::group_by(credible_set) %>%
+    dplyr::summarise(
+      n_variants = dplyr::n(),
+      .groups = "drop"
+    )
+
+  size_cutoff <- stats::quantile(
+    credible_set_sizes$n_variants,
+    probs = size_quantile,
+    na.rm = TRUE,
+    names = FALSE
+  )
+
+  retained_credible_sets <- credible_set_sizes %>%
+    dplyr::filter(n_variants <= size_cutoff) %>%
+    dplyr::select(credible_set)
+
+  filtered_data <- qtl_data %>%
+    dplyr::semi_join(
+      retained_credible_sets,
+      by = "credible_set"
+    )
+
+  # --------------------------------------------------------------------------
+  # Convert credible sets to genomic intervals
+  # --------------------------------------------------------------------------
+
+  credible_set_intervals <- filtered_data %>%
+    dplyr::group_by(
+      credible_set,
+      chromosome
+    ) %>%
+    dplyr::summarise(
+      start = min(position),
+      end = max(position),
+      n_variants = dplyr::n_distinct(position),
+      .groups = "drop"
+    )
+
+  if (anyDuplicated(credible_set_intervals$credible_set) > 0) {
+    stop(
+      "At least one credible-set ID occurs on multiple chromosomes. ",
+      "Credible-set IDs must be unique across chromosomes."
+    )
+  }
+
+  credible_set_ranges <- GenomicRanges::GRanges(
+    seqnames = credible_set_intervals$chromosome,
+    ranges = IRanges::IRanges(
+      start = credible_set_intervals$start,
+      end = credible_set_intervals$end
+    ),
+    credible_set = credible_set_intervals$credible_set
+  )
+
+  # --------------------------------------------------------------------------
+  # Calculate pairwise credible-set interval overlap
+  # --------------------------------------------------------------------------
+
+  overlap_hits <- GenomicRanges::findOverlaps(
+    credible_set_ranges,
+    credible_set_ranges,
+    ignore.strand = TRUE
+  )
+
+  overlap_pairs <- as.data.frame(overlap_hits) %>%
+    dplyr::filter(queryHits < subjectHits)
+
+  if (nrow(overlap_pairs) == 0) {
+    interval_overlap <- tibble::tibble(
+      credible_set_1 = character(),
+      credible_set_2 = character(),
+      chromosome = character(),
+      overlap_bp = integer(),
+      union_bp = integer(),
+      overlap_of_smaller = numeric(),
+      jaccard = numeric()
+    )
+  } else {
+    query_ranges <- credible_set_ranges[
+      overlap_pairs$queryHits
+    ]
+
+    subject_ranges <- credible_set_ranges[
+      overlap_pairs$subjectHits
+    ]
+
+    overlap_bp <- GenomicRanges::width(
+      GenomicRanges::pintersect(
+        query_ranges,
+        subject_ranges,
+        ignore.strand = TRUE
+      )
+    )
+
+    query_width <- GenomicRanges::width(query_ranges)
+    subject_width <- GenomicRanges::width(subject_ranges)
+
+    union_bp <- query_width +
+      subject_width -
+      overlap_bp
+
+    interval_overlap <- tibble::tibble(
+      credible_set_1 = as.character(
+        S4Vectors::mcols(query_ranges)$credible_set
+      ),
+      credible_set_2 = as.character(
+        S4Vectors::mcols(subject_ranges)$credible_set
+      ),
+      chromosome = as.character(
+        GenomicRanges::seqnames(query_ranges)
+      ),
+      overlap_bp = overlap_bp,
+      union_bp = union_bp,
+      overlap_of_smaller = overlap_bp /
+        pmin(query_width, subject_width),
+      jaccard = overlap_bp / union_bp
+    )
+  }
+
+  # --------------------------------------------------------------------------
+  # Cluster credible sets into loci using connected components
+  # --------------------------------------------------------------------------
+
+  locus_edges <- interval_overlap %>%
+    dplyr::filter(jaccard >= jaccard_threshold) %>%
+    dplyr::transmute(
+      from = credible_set_1,
+      to = credible_set_2
+    )
+
+  locus_vertices <- tibble::tibble(
+    name = credible_set_intervals$credible_set
+  )
+
+  locus_graph <- igraph::graph_from_data_frame(
+    d = locus_edges,
+    directed = FALSE,
+    vertices = locus_vertices
+  )
+
+  locus_membership <- igraph::components(
+    locus_graph
+  )$membership
+
+  locus_map <- tibble::tibble(
+    credible_set = names(locus_membership),
+    locus_id = as.integer(locus_membership)
+  )
+
+  # --------------------------------------------------------------------------
+  # Count unique targets per locus
+  # --------------------------------------------------------------------------
+
+  targets_per_locus <- filtered_data %>%
+    dplyr::distinct(
+      credible_set,
+      target
+    ) %>%
+    dplyr::left_join(
+      locus_map,
+      by = "credible_set"
+    ) %>%
+    dplyr::group_by(locus_id) %>%
+    dplyr::summarise(
+      n_targets = dplyr::n_distinct(target),
+      .groups = "drop"
+    )
+
+  # --------------------------------------------------------------------------
+  # Bin the number of targets per locus
+  # --------------------------------------------------------------------------
+
+  binned_targets <- targets_per_locus %>%
+    dplyr::mutate(
+      target_bin = cut(
+        n_targets,
+        breaks = target_breaks,
+        labels = target_labels,
+        right = FALSE,
+        include.lowest = TRUE
+      )
+    ) %>%
+    dplyr::filter(!is.na(target_bin)) %>%
+    dplyr::group_by(target_bin) %>%
+    dplyr::summarise(
+      n = dplyr::n(),
+      .groups = "drop"
+    ) %>%
+    tidyr::complete(
+      target_bin = factor(
+        target_labels,
+        levels = target_labels
+      ),
+      fill = list(n = 0L)
+    ) %>%
+    dplyr::mutate(
+      qtl_type = qtl_type,
+      target_bin = factor(
+        as.character(target_bin),
+        levels = rev(target_labels)
+      ),
+      proportion = n / sum(n)
+    )
+
+  # --------------------------------------------------------------------------
+  # Return results
+  # --------------------------------------------------------------------------
+
+  list(
+    qtl_type = qtl_type,
+    size_cutoff = size_cutoff,
+    credible_set_sizes = credible_set_sizes,
+    filtered_data = filtered_data,
+    credible_set_intervals = credible_set_intervals,
+    interval_overlap = interval_overlap,
+    locus_map = locus_map,
+    targets_per_locus = targets_per_locus,
+    binned_targets = binned_targets,
+
+    credible_set_size_plot = plot_credible_set_sizes(
+      credible_set_sizes,
+      x_max = histogram_x_max,
+      bin_width = histogram_bin_width,
+      x_label = paste0(
+        qtl_type,
+        ": variants per credible set"
+      )
+    ),
+
+    jaccard_plot = plot_jaccard_distribution(
+      interval_overlap,
+      title = paste0(
+        qtl_type,
+        ": credible-set interval overlap; threshold = ",
+        jaccard_threshold
+      )
+    )
+  )
+}
+
+# ------------------------------------------------------------------------------
+# Compare eQTL and caQTL distributions
+# ------------------------------------------------------------------------------
+
+compare_qtl_distributions <- function(
+    eqtl_results,
+    caqtl_results,
+    target_labels
+) {
+  combined_data <- bind_rows(
+    eqtl_results$binned_targets,
+    caqtl_results$binned_targets
+  ) %>%
+    mutate(
+      target_bin = factor(
+        as.character(target_bin),
+        levels = rev(target_labels)
+      ),
+      qtl_type = factor(
+        qtl_type,
+        levels = c("eQTL", "caQTL")
+      )
+    )
+
+  contingency_table <- combined_data %>%
+    dplyr::select(
+      qtl_type,
+      target_bin,
+      n
+    ) %>%
+    pivot_wider(
+      names_from = target_bin,
+      values_from = n,
+      values_fill = 0
+    ) %>%
+    arrange(qtl_type)
+
+  contingency_matrix <- as.matrix(
+    contingency_table[, -1, drop = FALSE]
+  )
+
+  rownames(contingency_matrix) <-
+    contingency_table$qtl_type
+
+  chi_square_test <- suppressWarnings(
+    chisq.test(contingency_matrix)
+  )
+
+  if (all(chi_square_test$expected >= 5)) {
+    global_test <- chi_square_test
+
+    diagnostics <- list(
+      expected = chi_square_test$expected,
+      standardized_residuals = chi_square_test$stdres,
+      contributions = (
+        chi_square_test$observed -
+          chi_square_test$expected
+      )^2 / chi_square_test$expected
+    )
+  } else {
+    global_test <- fisher.test(
+      contingency_matrix
+    )
+
+    diagnostics <- NULL
+  }
+
+  list(
+    binned_data = combined_data,
+    contingency_table = contingency_matrix,
+    global_test = global_test,
+    diagnostics = diagnostics,
+    plot = plot_target_distribution(
+      combined_data,
+      title = "Number of targets per QTL locus"
+    )
+  )
+}
+
+# ------------------------------------------------------------------------------
+# Load and prepare data
+# ------------------------------------------------------------------------------
+
+qtl_summary <- fread(
+  summary_path,
+  showProgress = FALSE
+) %>%
+  as_tibble()
+
+eqtl_data <- qtl_summary %>%
+  filter(
+    coloc_status %in% c(
+      "coloc",
+      "eQTL_only"
+    )
+  )
+
+caqtl_data <- qtl_summary %>%
+  filter(
+    coloc_status %in% c(
+      "coloc",
+      "caQTL_only"
+    )
+  )
+
+# ------------------------------------------------------------------------------
+# Run analyses
+# ------------------------------------------------------------------------------
+
+eqtl_results <- analyze_qtl_loci(
+  data = eqtl_data,
+  qtl_type = "eQTL",
+  credible_set_column = "finemapped_cs_eqtl",
+  target_column = "gene",
+  chromosome_column = "chromosome",
+  position_column = "variant_pos.y",
+  size_quantile = credible_set_quantile,
+  jaccard_threshold = jaccard_threshold,
+  target_breaks = target_breaks,
+  target_labels = target_labels
+)
+
+caqtl_results <- analyze_qtl_loci(
+  data = caqtl_data,
+  qtl_type = "caQTL",
+  credible_set_column = "finemapped_cs_caqtl",
+  target_column = "peak",
+  chromosome_column = "chromosome",
+  position_column = "variant_pos.x",
+  size_quantile = credible_set_quantile,
+  jaccard_threshold = jaccard_threshold,
+  target_breaks = target_breaks,
+  target_labels = target_labels
+)
+
+qtl_comparison <- compare_qtl_distributions(
+  eqtl_results,
+  caqtl_results,
+  target_labels
+)
+
+# ------------------------------------------------------------------------------
+# Main figure and statistical results
+# ------------------------------------------------------------------------------
+
+figure_targets_per_locus <- qtl_comparison$plot
+
+
+
+qtl_comparison$global_test
+qtl_comparison$contingency_table
+
+format(
+  qtl_comparison$global_test$p.value,
+  scientific = TRUE,
+  digits = 3
+)
+
+# ------------------------------------------------------------------------------
+# Supplementary diagnostic plots
+# ------------------------------------------------------------------------------
+
+supplementary_diagnostics <- plot_grid(
+  eqtl_results$credible_set_size_plot,
+  eqtl_results$jaccard_plot,
+  caqtl_results$credible_set_size_plot,
+  caqtl_results$jaccard_plot,
+  ncol = 2,
+  labels = "AUTO"
+)
+
+supplementary_size_distributions <- plot_grid(
+  eqtl_results$credible_set_size_plot,
+  caqtl_results$credible_set_size_plot,
+  ncol = 1,
+  labels = c("A", "B")
+)
+
+plot_grid(figure_targets_per_locus, supplementary_diagnostics) 
+```
+
+```{r Figure-F, message=FALSE, warning=FALSE, fig.width=14, fig.height=6}
+# Figure 1F: Chromatin state + genomic annotation summaries (eQTL + caQTL)
+
+
+# -----------------------------
+# 0) Paths / inputs
+# -----------------------------
+summary_df      <- paths_figure1$summary_df
+gtf_path        <- paths_figure3$gtf_path
+chrom_bed_path  <- paths_figure1$chromatin_state_bed
+
+# what defines eQTL / caQTL in your table
+eqtl_only  <- c("coloc", "eQTL_only")
+caqtl_only <- c("coloc", "caQTL_only")
+
+# CS-size filter: keep bottom q (e.g., 0.75)
+q_keep <- 0.75
+
+# caQTL category collapse rule
+caqtl_cat_levels <- c("no_Peak_overlap", "in_other_Peak", "in_caPeak")
+
+# chromatin state groups (collapsed labels) + plotting order
+cs_state_levels <- c(
+  "Promoter",
+  "Enhancer_active",
+  "Enhancer_weak",
+  "Transcribed",
+  "Repressed_polycomb",
+  "ZNF_Het_Quies"
+)
+
+# genomic region priority for locateVariants (ties resolved by this order)
+region_priority <- c("coding","fiveUTR","threeUTR","spliceSite","promoter","intron","intergenic")
+
+
+# -----------------------------
+# 0) Read data
+# -----------------------------
+dt <- data.table::fread(summary_df)
+
+eqtl_df0  <- dt %>% dplyr::filter(coloc_status %in% eqtl_only)
+caqtl_df0 <- dt %>% dplyr::filter(coloc_status %in% caqtl_only)
+
+rm(dt)
+
+
+# -----------------------------
+# 1) Plot helpers (your style)
+# -----------------------------
+BAR_WIDTH <- 0.6
+
+stack_prop2 <- function(df, x_var, fill_var, title, legend_title, label_min = 0.03) {
+  ggplot(df, aes(x = {{ x_var }}, y = prop, fill = {{ fill_var }})) +
+    geom_col(width = BAR_WIDTH, color = "grey20", linewidth = 0.2) +  # <-- default stack
+    geom_text(
+      aes(label = ifelse(prop >= label_min, scales::percent(prop, accuracy = 0.1), "")),
+      position = position_stack(vjust = 0.5),
+      size = 3,
+      color = "grey20"
+    ) +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1),
+      limits = c(0, 1),
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    labs(x = NULL, y = NULL, title = title, fill = legend_title) +
+    guides(fill = guide_legend(reverse = TRUE)) +
+    theme_minimal(base_size = 12) +
+    theme(axis.ticks.x = element_blank(), legend.position = "right") +
+    coord_flip()
+}
+stack_prop_any <- function(df, x_var = NULL, fill_var,
+                           title = "", legend_title = "",
+                           label_min = 0.03,
+                           x_const = "All CS") {
+  
+  # If no x_var supplied, create a constant x so everything stacks into one bar
+  if (is.null(x_var)) {
+    df <- df %>% dplyr::mutate(.x = x_const)
+    x_var <- rlang::sym(".x")
+  } else {
+    x_var <- rlang::enquo(x_var)
+  }
+  
+  fill_var <- rlang::enquo(fill_var)
+  
+  ggplot(df, aes(x = !!x_var, y = prop, fill = !!fill_var)) +
+    geom_col(width = BAR_WIDTH, color = "grey20", linewidth = 0.2) +
+    geom_text(
+      aes(label = ifelse(prop >= label_min, scales::percent(prop, accuracy = 0.1), "")),
+      position = position_stack(vjust = 0.5),
+      size = 3,
+      color = "grey20"
+    ) +
+    coord_flip() +
+    scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1),
+      limits = c(0, 1),
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    labs(x = NULL, y = NULL, title = title, fill = legend_title) +
+    guides(fill = guide_legend(reverse = TRUE)) +
+    theme_minimal(base_size = 12) +
+    theme(axis.ticks.x = element_blank(), legend.position = "right")
+}
+
+# Dodged barplot with percent labels + per-state q label above each state
+plot_dodged_states_with_q <- function(plot_df,
+                                      group_col, state_col, prop_col,
+                                      q_tbl,
+                                      title = "", subtitle = "",
+                                      y_pad = 0.06) {
+  
+  # plot_df columns: group_col, state_col, prop_col
+  # q_tbl columns: cs_state, q_label (and maybe others)
+  ann <- plot_df %>%
+    group_by(.data[[state_col]]) %>%
+    summarise(max_prop = max(.data[[prop_col]]), .groups = "drop") %>%
+    transmute(cs_state = .data[[state_col]], max_prop) %>%
+    left_join(q_tbl %>% transmute(cs_state, q_label), by = "cs_state") %>%
+    mutate(y = pmin(max_prop + y_pad, 0.98))
+  
+  ymax <- min(1, max(ann$y, na.rm = TRUE) + 0.05)
+  
+  ggplot(plot_df, aes(x = .data[[state_col]], y = .data[[prop_col]], fill = .data[[group_col]])) +
+    geom_col(position = position_dodge(width = 0.85), width = 0.75,
+             color = "grey20", linewidth = 0.2) +
+    geom_text(
+      aes(label = scales::percent(.data[[prop_col]], accuracy = 0.1)),
+      position = position_dodge(width = 0.85),
+      vjust = -0.25, size = 3
+    ) +
+    geom_text(
+      data = ann,
+      aes(x = cs_state, y = y, label = q_label),
+      inherit.aes = FALSE,
+      size = 3
+    ) +
+    scale_y_continuous(
+      labels = percent_format(accuracy = 1),
+      limits = c(0, ymax),
+      expand = expansion(mult = c(0, 0.02))
+    ) +
+    labs(x = "Chromatin state (collapsed)", y = "Proportion (within group)", fill = NULL,
+         title = title, subtitle = subtitle) +
+    theme_classic(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 35, hjust = 1))
+}
+
+# -----------------------------
+# 2) Core helpers: filtering + GRanges + annotation + majority vote
+# -----------------------------
+filter_bottom_cs <- function(df, cs_col, var_col, q = 0.75) {
+  cs_sym  <- rlang::sym(cs_col)
+  var_sym <- rlang::sym(var_col)
+  
+  cs_sizes <- df %>%
+    distinct(!!cs_sym, !!var_sym) %>%
+    dplyr::count(!!cs_sym, name = "n_variants_per_cs")
+  
+  q_cut <- as.numeric(stats::quantile(cs_sizes$n_variants_per_cs, q, na.rm = TRUE))
+  
+  keep_cs <- cs_sizes %>%
+    dplyr::filter(n_variants_per_cs <= q_cut) %>%
+    dplyr::select(!!cs_sym)
+  
+  df_filt <- df %>%
+    dplyr::semi_join(keep_cs, by = cs_col)
+  
+  list(df = df_filt, cs_sizes = cs_sizes, q_cut = q_cut)
+}
+
+
+make_variants_gr <- function(df, var_id_col, chr_col, pos_col) {
+  u <- df %>%
+    distinct(
+      variant_id = .data[[var_id_col]],
+      chr        = .data[[chr_col]],
+      pos        = .data[[pos_col]]
+    ) %>%
+    filter(!is.na(variant_id), !is.na(chr), !is.na(pos))
+  
+  gr <- GRanges(seqnames = u$chr,
+                ranges   = IRanges(start = u$pos, end = u$pos))
+  mcols(gr)$variant_id <- u$variant_id
+  gr
+}
+
+collapse_chrom_state <- function(x) {
+  case_when(
+    x %in% c("TssA", "TssFlnkU", "TssFlnkD", "TssFlnk", "TssBiv") ~ "Promoter",
+    x %in% c("EnhA1", "EnhA2", "EnhG1", "EnhG2", "EnhBiv")       ~ "Enhancer_active",
+    x %in% c("EnhWk")                                            ~ "Enhancer_weak",
+    x %in% c("Tx", "TxWk")                                       ~ "Transcribed",
+    x %in% c("ReprPC", "ReprPCWk")                               ~ "Repressed_polycomb",
+    x %in% c("ZNF/Rpts", "Het", "Quies")                         ~ "ZNF_Het_Quies",
+    TRUE                                                         ~ NA_character_
+  )
+}
+
+annotate_variants_with_chromstate <- function(variantsGR, chrom_bed_path) {
+  states <- rtracklayer::import.bed(chrom_bed_path)
+  ov <- findOverlaps(variantsGR, states, ignore.strand = TRUE)
+  
+  variantsGR$T_cell_chromatin_state <- NA_character_
+  variantsGR$T_cell_chromatin_state[queryHits(ov)] <- states$name[subjectHits(ov)]
+  
+  tibble(
+    variant_id = mcols(variantsGR)$variant_id,
+    T_cell_chromatin_state = variantsGR$T_cell_chromatin_state,
+    chrom_state_group = collapse_chrom_state(variantsGR$T_cell_chromatin_state)
+  )
+}
+
+# majority vote per CS (optionally stratified by some grouping columns like caqtl_category)
+majority_vote_cs <- function(df, cs_col, label_col, by_cols = NULL, levels_ordered = NULL) {
+  
+  cs_sym  <- rlang::sym(cs_col)
+  lab_sym <- rlang::sym(label_col)
+  
+  tmp <- df %>%
+    dplyr::mutate(
+      .cs  = !!cs_sym,
+      .lab = !!lab_sym
+    )
+  
+  # enforce factor order so ties break by your priority
+  if (!is.null(levels_ordered)) {
+    tmp <- tmp %>%
+      dplyr::mutate(.lab = factor(.lab, levels = levels_ordered, ordered = TRUE))
+  }
+  
+  if (is.null(by_cols)) {
+    
+    out <- tmp %>%
+      #dplyr::filter(!is.na(.lab)) %>%
+      dplyr::count(.cs, .lab, name = "N") %>%
+      dplyr::arrange(.cs, dplyr::desc(N), .lab) %>%
+      dplyr::group_by(.cs) %>%
+      dplyr::slice(1) %>%
+      dplyr::ungroup() %>%
+      dplyr::transmute(
+        !!cs_sym := .cs,
+        cs_label = as.character(.lab)
+      )
+    
+  } else {
+    
+    by_syms <- rlang::syms(by_cols)
+    
+    out <- tmp %>%
+      #dplyr::filter(!is.na(.lab)) %>%
+      dplyr::count(!!!by_syms, .cs, .lab, name = "N") %>%
+      dplyr::arrange(!!!by_syms, .cs, dplyr::desc(N), .lab) %>%
+      dplyr::group_by(!!!by_syms, .cs) %>%
+      dplyr::slice(1) %>%
+      dplyr::ungroup() %>%
+      dplyr::transmute(
+        !!!by_syms,
+        !!cs_sym := .cs,
+        cs_label = as.character(.lab)
+      )
+  }
+  
+  out
+}
+
+
+# -----------------------------
+# 3) Chi-square helpers for chromatin state distributions
+# -----------------------------
+chisq_global <- function(count_df, group_col, state_col, count_col) {
+  tab <- count_df %>%
+    transmute(
+      g = as.character(.data[[group_col]]),
+      s = as.character(.data[[state_col]]),
+      n = .data[[count_col]]
+    ) %>%
+    pivot_wider(names_from = s, values_from = n, values_fill = 0) %>%
+    arrange(g)
+  
+  mat <- as.matrix(tab[, -1, drop = FALSE])
+  rownames(mat) <- tab$g
+  suppressWarnings(chisq.test(mat))
+}
+
+# per-state 2x2 (state vs rest), BH across states
+per_state_2x2 <- function(count_df, group_col, state_col, count_col) {
+  tab <- count_df %>%
+    transmute(
+      g = as.character(.data[[group_col]]),
+      s = as.character(.data[[state_col]]),
+      n = .data[[count_col]]
+    ) %>%
+    pivot_wider(names_from = s, values_from = n, values_fill = 0) %>%
+    arrange(g)
+  
+  mat <- as.matrix(tab[, -1, drop = FALSE])
+  rownames(mat) <- tab$g
+  states_here <- colnames(mat)
+  
+  out <- map_dfr(states_here, function(st) {
+    in_st <- mat[, st]
+    other <- rowSums(mat) - in_st
+    m2 <- cbind(in_state = in_st, other = other)
+    tt <- suppressWarnings(chisq.test(m2))
+    
+    tibble(
+      cs_state = st,
+      p_value  = tt$p.value,
+      method   = tt$method
+    )
+  }) %>%
+    mutate(
+      p_adj_BH = p.adjust(p_value, method = "BH"),
+      q_label  = paste0("q = ", format.pval(p_adj_BH, digits = 2, eps = 1e-300))
+    ) %>%
+    arrange(p_value)
+  
+  out
+}
+
+# Pairwise comparisons within caQTL categories: per-state q-values within each pair
+pairwise_per_state <- function(count_df, group_col, state_col, count_col) {
+  cats <- levels(factor(count_df[[group_col]]))
+  pairs <- combn(cats, 2, simplify = FALSE)
+  
+  map_dfr(pairs, function(p) {
+    g1 <- p[1]; g2 <- p[2]
+    sub <- count_df %>% filter(.data[[group_col]] %in% c(g1, g2))
+    
+    per <- per_state_2x2(sub, group_col = group_col, state_col = state_col, count_col = count_col) %>%
+      mutate(g1 = g1, g2 = g2, pair = paste0(g1, " vs ", g2))
+    
+    per
+  })
+}
+
+# ============================================================
+# A) eQTL pipeline (filter -> GR -> genomic region  -> chrom states)
+# ============================================================
+
+eqtl_f <- filter_bottom_cs(eqtl_df0,
+                           cs_col  = "finemapped_cs_eqtl",
+                           var_col = "variant_id.y",
+                           q = q_keep)
+eqtl_df_filt <- eqtl_f$df
+message("eQTL CS-size cutoff (", q_keep*100, "%): <= ", eqtl_f$q_cut, " variants per CS")
+
+eqtl.variantsGR <- make_variants_gr(eqtl_df_filt,
+                                    var_id_col = "variant_id.y",
+                                    chr_col    = "chr.y",
+                                    pos_col    = "variant_pos.y")
+
+# ----  eQTL genomic region via locateVariants + CS majority vote
+txdb <- GenomicFeatures::makeTxDbFromGFF(gtf_path)
+
+hits_list <- list(
+  coding     = locateVariants(eqtl.variantsGR, txdb, CodingVariants()),
+  fiveUTR    = locateVariants(eqtl.variantsGR, txdb, FiveUTRVariants()),
+  threeUTR   = locateVariants(eqtl.variantsGR, txdb, ThreeUTRVariants()),
+  spliceSite = locateVariants(eqtl.variantsGR, txdb, SpliceSiteVariants()),
+  intron     = locateVariants(eqtl.variantsGR, txdb, IntronVariants()),
+  promoter   = locateVariants(eqtl.variantsGR, txdb, PromoterVariants(upstream = 2000, downstream = 200)),
+  intergenic = locateVariants(eqtl.variantsGR, txdb, IntergenicVariants())
+)
+rm(txdb)
+hits_tbl <- rbindlist(lapply(names(hits_list), function(lbl) {
+  hmc <- as.data.frame(S4Vectors::mcols(hits_list[[lbl]]))
+  stopifnot("QUERYID" %in% names(hmc))
+  data.frame(QUERYID = as.integer(hmc$QUERYID), region = lbl, stringsAsFactors = FALSE)
+}), use.names = TRUE)
+rm(hits_list)
+hits_one <- hits_tbl %>%
+  mutate(region = factor(region, levels = region_priority, ordered = TRUE)) %>%
+  group_by(QUERYID) %>%
+  slice_min(as.integer(region), with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(variant_id = mcols(eqtl.variantsGR)$variant_id[QUERYID]) %>%
+  dplyr::select(variant_id, region)
+
+region_map <- tibble(variant_id = mcols(eqtl.variantsGR)$variant_id) %>%
+  left_join(hits_one, by = "variant_id") %>%
+  mutate(
+    region = forcats::fct_explicit_na(region, na_level = "intergenic"),
+    region = forcats::fct_expand(region, region_priority),
+    region = forcats::fct_relevel(region, region_priority),
+    region = as.character(region)
+  )
+
+eqtl_region_df <- eqtl_df_filt %>%
+  dplyr::select(finemapped_cs_eqtl, variant_id = variant_id.y) %>%
+  left_join(region_map, by = "variant_id") %>%
+  distinct(finemapped_cs_eqtl, variant_id, region)
+#rm(hits_one)
+#rm(region_map)
+cs_region_major <- majority_vote_cs(
+  eqtl_region_df,
+  cs_col = "finemapped_cs_eqtl",
+  label_col = "region",
+  by_cols = NULL,
+  levels_ordered = region_priority
+) %>%
+  dplyr::rename(cs_region = cs_label)
+
+eqtl_region_counts <- cs_region_major %>%
+  mutate(cs_region = if_else(cs_region %in% c("fiveUTR","threeUTR"), "UTR", cs_region)) %>%
+  dplyr::count(cs_region, name = "n_cs") %>%
+  mutate(prop = n_cs / sum(n_cs),
+         cs_region = fct_reorder(cs_region, n_cs, .desc = TRUE))
+#rm(cs_region_major)
+eqtl_annot_region_pt <- stack_prop_any(
+  eqtl_region_counts,
+  x_var = NULL,
+  fill_var = cs_region,
+  title = "eQTL CS genomic annotation (majority; bottom 75% CS sizes)",
+  legend_title = "Genomic region",
+  x_const = "All CS"
+) +
+  scale_fill_brewer(palette = "Set3", drop = FALSE)
+
+# ---- eQTL chromatin state overlap (variant -> CS majority)
+eqtl_var_state_tbl <- annotate_variants_with_chromstate(eqtl.variantsGR, chrom_bed_path)
+
+eqtl_state_df <- eqtl_df_filt %>%
+  dplyr::select(finemapped_cs_eqtl, variant_id = variant_id.y) %>%
+  left_join(eqtl_var_state_tbl %>% dplyr::select(variant_id, chrom_state_group),
+            by = "variant_id") %>%
+  distinct(finemapped_cs_eqtl, variant_id, chrom_state_group) %>%
+  mutate(chrom_state_group = factor(chrom_state_group, levels = cs_state_levels, ordered = TRUE))
+
+
+eqtl_state_major <- majority_vote_cs(
+  eqtl_state_df,
+  cs_col = "finemapped_cs_eqtl",
+  label_col = "chrom_state_group",
+  by_cols = NULL,
+  levels_ordered = cs_state_levels
+) %>%
+  dplyr::rename(cs_state = cs_label)
+
+
+eqtl_state_counts <- eqtl_state_major %>%
+  dplyr::count(cs_state, name = "n_cs") %>%
+  complete(cs_state = factor(cs_state_levels, levels = cs_state_levels),
+           fill = list(n_cs = 0L)) %>%
+  mutate(prop = n_cs / sum(n_cs),
+         cs_state = factor(cs_state, levels = rev(cs_state_levels)))
+
+eqtl_chrom_state_pt <- stack_prop_any(
+  eqtl_state_counts,
+  x_var = NULL,
+  fill_var = cs_state,
+  title = "eQTL CS chromatin state (majority; bottom 75% CS sizes)",
+  legend_title = "Chromatin state",
+  x_const = "All CS"
+) +
+  scale_fill_brewer(palette = "Set3", drop = FALSE)
+
+
+# ============================================================
+# B) caQTL pipeline (standardized to match eQTL)
+# ============================================================
+
+caqtl_df0 <- caqtl_df0 %>%
+  mutate(
+    caqtl_category = ifelse(cs_type_any_var %in% c("in_corr_Peak", "in_other_Peak"),
+                            "in_other_Peak",
+                            cs_type_any_var),
+    caqtl_category = factor(caqtl_category, levels = caqtl_cat_levels)
+  )
+
+caqtl_f <- filter_bottom_cs(caqtl_df0,
+                            cs_col  = "finemapped_cs_caqtl",
+                            var_col = "variant_id.x",
+                            q = q_keep)
+caqtl_df_filt <- caqtl_f$df
+message("caQTL CS-size cutoff (", q_keep*100, "%): <= ", caqtl_f$q_cut, " variants per CS")
+
+caqtl.variantsGR <- make_variants_gr(caqtl_df_filt,
+                                     var_id_col = "variant_id.x",
+                                     chr_col    = "chr.x",
+                                     pos_col    = "variant_pos.x")
+
+caqtl_var_state_tbl <- annotate_variants_with_chromstate(caqtl.variantsGR, chrom_bed_path)
+
+caqtl_state_df <- caqtl_df_filt %>%
+  dplyr::select(finemapped_cs_caqtl, caqtl_category, variant_id = variant_id.x) %>%
+  left_join(caqtl_var_state_tbl %>% dplyr::select(variant_id, chrom_state_group),
+            by = "variant_id") %>%
+  distinct(finemapped_cs_caqtl, caqtl_category, variant_id, chrom_state_group) %>%
+  mutate(chrom_state_group = factor(chrom_state_group, levels = cs_state_levels, ordered = TRUE))
+
+caqtl_state_major <- majority_vote_cs(caqtl_state_df,
+                                      cs_col = "finemapped_cs_caqtl",
+                                      label_col = "chrom_state_group",
+                                      by_cols = c("caqtl_category"),
+                                      levels_ordered = cs_state_levels) %>%
+  dplyr::rename(cs_state = cs_label)
+
+# counts per category x state (CS-level majority)
+caqtl_state_counts <- caqtl_state_major %>%
+  dplyr::count(caqtl_category, cs_state, name = "n_cs") %>%
+  complete(
+    caqtl_category = factor(caqtl_cat_levels, levels = caqtl_cat_levels),
+    cs_state       = factor(cs_state_levels, levels = cs_state_levels),
+    fill = list(n_cs = 0L)
+  ) %>%
+  group_by(caqtl_category) %>%
+  mutate(prop = n_cs / sum(n_cs),
+         cs_state = factor(cs_state, levels = rev(cs_state_levels))) %>%
+  ungroup()
+
+caqtl_chrom_state_pt <- stack_prop2(
+  caqtl_state_counts,
+  x_var = caqtl_category,
+  fill_var = cs_state,
+  title = "caQTL CS chromatin state by category (majority; bottom 75% CS sizes)",
+  legend_title = "Chromatin state"
+) +
+  scale_fill_brewer(palette = "Set3", drop = FALSE)
+
+
+caqtl_state_counts_all <- caqtl_state_major %>%
+  dplyr::count(cs_state, name = "n_cs") %>%
+  complete(cs_state = factor(cs_state_levels, levels = cs_state_levels),
+           fill = list(n_cs = 0L)) %>%
+  mutate(prop = n_cs / sum(n_cs),
+         cs_state = factor(cs_state, levels = rev(cs_state_levels)))
+
+caqtl_chrom_state_all_pt <-stack_prop_any(
+  caqtl_state_counts_all,
+  x_var = NULL,
+  fill_var = cs_state,
+  title = "caQTL CS chromatin state (majority; bottom 75% CS sizes)",
+  legend_title = "Chromatin state",
+  x_const = "All CS"
+) +
+  scale_fill_brewer(palette = "Set3", drop = FALSE)
+
+
+# ============================================================
+# C) Stats + plot: eQTL vs caQTL_all (chromatin states)
+# ============================================================
+
+eqtl_cs_state_tbl <- eqtl_state_major %>%
+  transmute(group = factor("eQTL", levels = c("eQTL","caQTL_all")),
+            cs_state = factor(cs_state, levels = cs_state_levels))
+
+caqtl_all_cs_state_tbl <- caqtl_state_major %>%
+  transmute(group = factor("caQTL_all", levels = c("eQTL","caQTL_all")),
+            cs_state = factor(cs_state, levels = cs_state_levels))
+
+eqtl_vs_caqtl_state_counts <- bind_rows(eqtl_cs_state_tbl, caqtl_all_cs_state_tbl) %>%
+  dplyr::count(group, cs_state, name = "n_cs") %>%
+  complete(group = factor(c("eQTL","caQTL_all"), levels = c("eQTL","caQTL_all")),
+           cs_state = factor(cs_state_levels, levels = cs_state_levels),
+           fill = list(n_cs = 0L)) %>%
+  group_by(group) %>%
+  mutate(prop = n_cs / sum(n_cs)) %>%
+  ungroup()
+
+chi_eqtl_vs_caqtl_global <- chisq_global(eqtl_vs_caqtl_state_counts,
+                                         group_col = "group",
+                                         state_col = "cs_state",
+                                         count_col = "n_cs")
+
+chi_eqtl_vs_caqtl_perstate <- per_state_2x2(eqtl_vs_caqtl_state_counts,
+                                            group_col = "group",
+                                            state_col = "cs_state",
+                                            count_col = "n_cs") %>%
+  mutate(cs_state = factor(cs_state, levels = cs_state_levels))
+
+plot_eqtl_vs_caqtl_states <- plot_dodged_states_with_q(
+  plot_df = eqtl_vs_caqtl_state_counts %>%
+    mutate(cs_state = factor(cs_state, levels = cs_state_levels)),
+  group_col = "group",
+  state_col = "cs_state",
+  prop_col  = "prop",
+  q_tbl     = chi_eqtl_vs_caqtl_perstate,
+  title     = "Chromatin state distribution: eQTL vs caQTL (collapsed)",
+  subtitle  = "State labels show BH-adjusted q-values from per-state (state vs rest) 2x2 chi-square."
+)
+
+
+# ============================================================
+# E) forest plot
+# ============================================================
+df <- caqtl_state_major %>%
+  distinct(caqtl_category, finemapped_cs_caqtl, cs_state)  # one row per CS
+
+N <- nrow(df)
+
+cat_tot <- df %>% dplyr::count(caqtl_category, name = "n_cat")
+state_tot <- df %>% dplyr::count(cs_state, name = "n_state")
+
+grid <- df %>%
+  dplyr::count(caqtl_category, cs_state, name = "a") %>%          # a = in C AND in S
+  left_join(cat_tot, by = "caqtl_category") %>%
+  left_join(state_tot, by = "cs_state") %>%
+  mutate(
+    b = n_cat - a,                                         # in C AND not S
+    c = n_state - a,                                       # not C AND in S
+    d = N - a - b - c                                      # not C AND not S
+  )
+
+fisher_one <- function(a,b,c,d){
+  ft <- fisher.test(matrix(c(a,b,c,d), nrow = 2, byrow = TRUE))
+  tibble(
+    odds_ratio = unname(ft$estimate),
+    conf_low   = unname(ft$conf.int[1]),
+    conf_high  = unname(ft$conf.int[2]),
+    p_value    = ft$p.value
+  )
+}
+
+res <- grid %>%
+  mutate(out = pmap(list(a,b,c,d), fisher_one)) %>%
+  unnest(out) %>%
+  group_by(caqtl_category) %>%                             # BH within category
+  mutate(q_value = p.adjust(p_value, method = "BH")) %>%
+  ungroup() %>%
+  arrange(caqtl_category, q_value)
+
+res
+
+
+# helper: q-value -> asterisks
+q_to_stars <- function(q) {
+  dplyr::case_when(
+    is.na(q) ~ "",
+    q < 1e-3 ~ "***",
+    q < 1e-2 ~ "**",
+    q < 5e-2 ~ "*",
+    TRUE     ~ ""
+  )
+}
+
+plot_df <- res %>%
+  mutate(
+    sig   = q_value < 0.05,
+    stars = q_to_stars(q_value),
+    cs_state = fct_reorder(cs_state, odds_ratio, .fun = median, .na_rm = TRUE)
+  ) %>% mutate(
+    caqtl_category = factor(
+      caqtl_category,
+      levels = c("in_caPeak","in_other_Peak","no_Peak_overlap")   # <- your desired top→bottom order
+    )
+  )
+
+
+# put stars just to the right of the CI, but not past the axis max
+star_pos <- plot_df %>%
+  group_by(caqtl_category) %>%
+  summarise(
+    x_star = pmin(6.0, max(conf_high, na.rm = TRUE) * 1.05),
+    .groups = "drop"
+  )
+
+plot_df <- plot_df %>% left_join(star_pos, by = "caqtl_category")
+
+p_forest <- ggplot(plot_df, aes(y = cs_state, x = odds_ratio)) +
+  geom_vline(xintercept = 1, linetype = 2, linewidth = 0.4) +
+  geom_errorbarh(aes(xmin = conf_low, xmax = conf_high),
+                 height = 0.18, linewidth = 0.6) +
+  geom_point(aes(size = -log10(q_value), alpha = sig), shape = 16) +
+  geom_text(aes(x = x_star, label = stars),
+            vjust = 0.35, size = 4, na.rm = TRUE) +
+  scale_x_log10(
+    limits = c(0.1, 6.0),
+    breaks = c(0.1,0.2,0.4,0.6, 0.8, 1, 1.5, 2, 3, 4, 6)
+  ) +
+  coord_cartesian(clip = "off") +
+  scale_alpha_manual(values = c(`TRUE` = 1, `FALSE` = 0.35), guide = "none") +
+  scale_size_continuous(range = c(1.6, 4.8), name = expression(-log[10](q))) +
+  facet_wrap(~ caqtl_category, ncol = 1) +   # <- same x across facets
+  labs(
+    x = "Odds ratio (log10 scale)", y = NULL,
+    title = "Chromatin-state enrichment by caQTL category",
+    subtitle = "Points show OR; bars show 95% CI. Asterisks denote BH q-value (*<0.05, **<0.01, ***<0.001)."
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    strip.text = element_text(size = 10),
+    panel.spacing = unit(0.9, "lines"),
+    plot.margin = margin(5.5, 20, 5.5, 5.5)  # extra right margin for stars
+  )
+
+p_forest
+p_forest <- p_forest +
+  scale_x_log10(
+    limits = c(0.1, 6.0),
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5),
+    labels = c("0.1","0.2","0.5","1","2","5")
+  )
+
+
+# ============================================================
+# D) Plots
+# ============================================================
+
+
+# Show plots (in interactive session)
+# Combine the eQTL and caQTL chromatin-state plots
+chrom_states_plot <- cowplot::plot_grid(
+  eqtl_chrom_state_pt,
+  caqtl_chrom_state_pt,
+  ncol = 1,
+  labels = c("A", "B"),
+  align = "v",
+  axis = "lr"
+)
+
+left_panels <- cowplot::plot_grid(
+  eqtl_annot_region_pt,
+  plot_eqtl_vs_caqtl_states,
+  ncol = 1,
+  labels = c("A", "B"),
+    rel_heights = c(.5, 1),
+  align = "v",
+  axis = "lr"
+)
+
+supplements_plot <- cowplot::plot_grid(
+  left_panels,
+  p_forest,
+  ncol = 2,
+  labels = c("", "c"),
+  rel_widths = c(1, 0.8),
+  align = "h",
+  axis = "tb"
+)
+
+
+
+#display results
+chrom_states_plot
+supplements_plot
+chi_eqtl_vs_caqtl_perstate
+
+
+```
+
+```{r Figure-G, message=FALSE, warning=FALSE, fig.width=14, fig.height=6}
+#coloc percent
+
+# -----------------------------
+# Global style
+# -----------------------------
+BAR_WIDTH <- 0.6
+BASE_SIZE <- 12
+
+# -----------------------------
+# Plot helpers
+# -----------------------------
+stack_prop_onebar <- function(df, fill_var, title, legend_title, label_min = 0.03) {
+  ggplot(df, aes(x = "All CS", y = n, fill = {{ fill_var }})) +
+    geom_col(width = BAR_WIDTH, color = "grey20", linewidth = 0.2, position = "fill") +
+    geom_text(
+      aes(label = ifelse(n / sum(n) >= label_min, percent(n / sum(n), accuracy = 0.1), "")),
+      position = position_fill(vjust = 0.5),
+      size = 3, color = "grey20"
+    ) +
+    scale_y_continuous(labels = percent_format(), expand = expansion(mult = c(0, 0.05))) +
+    labs(x = NULL, y = NULL, title = title, fill = legend_title) +
+    guides(fill = guide_legend(reverse = TRUE)) +
+    theme_minimal(base_size = BASE_SIZE) +
+    theme(axis.ticks.x = element_blank(), legend.position = "right") +
+    coord_flip()
+}
+
+stack_prop_by_group <- function(df, x_var, fill_var, title, legend_title, label_min = 0.03) {
+  ggplot(df, aes(x = {{ x_var }}, y = prop, fill = {{ fill_var }})) +
+    geom_col(width = BAR_WIDTH, color = "grey20", linewidth = 0.2, position = "fill") +
+    geom_text(
+      aes(label = ifelse(prop >= label_min, percent(prop, accuracy = 0.1), "")),
+      position = position_fill(vjust = 0.5),
+      size = 3, color = "grey20"
+    ) +
+    scale_y_continuous(labels = percent_format(), expand = expansion(mult = c(0, 0.05))) +
+    labs(x = NULL, y = NULL, title = title, fill = legend_title) +
+    guides(fill = guide_legend(reverse = TRUE)) +
+    theme_minimal(base_size = BASE_SIZE) +
+    theme(axis.ticks.x = element_blank(), legend.position = "right") +
+    coord_flip()
+}
+
+# -----------------------------
+# Stats helper: ONE comparison (global 2xK) for coloc vs not-coloc across categories
+# -----------------------------
+coloc_only_global <- function(plot_df,
+                              cat_col = "caqtl_category",
+                              status_col = "coloc_status",
+                              n_col = "n",
+                              coloc_level = "coloc") {
+  
+  coloc_counts <- plot_df %>%
+    dplyr::mutate(is_coloc = (.data[[status_col]] == coloc_level)) %>%
+    dplyr::group_by(.data[[cat_col]], is_coloc) %>%
+    dplyr::summarise(n = sum(.data[[n_col]]), .groups = "drop") %>%
+    tidyr::complete(!!rlang::sym(cat_col), is_coloc, fill = list(n = 0L)) %>%
+    tidyr::pivot_wider(names_from = is_coloc, values_from = n, values_fill = 0) %>%
+    dplyr::rename(n_not_coloc = `FALSE`, n_coloc = `TRUE`) %>%
+    dplyr::mutate(
+      total = n_coloc + n_not_coloc,
+      prop_coloc = dplyr::if_else(total > 0, n_coloc / total, NA_real_)
+    )
+  
+  # 2 x K contingency: rows = categories, cols = (coloc, not_coloc)
+  mat <- as.matrix(coloc_counts[, c("n_coloc", "n_not_coloc"), drop = FALSE])
+  rownames(mat) <- as.character(coloc_counts[[cat_col]])
+  storage.mode(mat) <- "integer"
+  
+  # One global test: chi-square if expected ok, else Fisher
+  chisq0 <- suppressWarnings(stats::chisq.test(mat, correct = FALSE))
+  exp_ok <- all(chisq0$expected >= 5)
+  
+  global <- if (exp_ok) chisq0 else stats::fisher.test(mat)
+  
+  list(
+    coloc_counts = coloc_counts,
+    contingency  = mat,
+    global_test  = global
+  )
+}
+
+# -----------------------------
+# Inputs
+# -----------------------------
+#summary_df <- "/gchm/cd4_qtl_paper_figures/figure_1/data/eqtl_caqtl_finemapping_coloc_all.tsv"
+
+eqtl_only  <- c("coloc", "eQTL_only")
+caqtl_only <- c("coloc", "caQTL_only")
+
+# Palette
+qtl_cmap_coloc2 <- c(
+  "eQTL_only"  = "#c7197c",
+  "caQTL_only" = "#9ccb86",
+  "coloc"      = "#f39c12"
+)
+
+# -----------------------------
+# Read and subset
+# -----------------------------
+dt <- data.table::fread(summary_df)
+eqtl_df0  <- dt %>% filter(coloc_status %in% eqtl_only)
+caqtl_df0 <- dt %>% filter(coloc_status %in% caqtl_only)
+rm(dt)
+
+# ======================================================================
+# A) eQTL coloc percent (one stacked bar)
+# ======================================================================
+plot_df_eqtl <- eqtl_df0 %>%
+  distinct(finemapped_cs_eqtl, coloc_status) %>%
+  dplyr::count(coloc_status, name = "n") %>%
+  mutate(
+    coloc_status = factor(coloc_status, levels = c("coloc", "eQTL_only")),
+    prop  = n / sum(n),
+    label = paste0(n, " (", percent(prop, accuracy = 0.1), ")")
+  )
+
+eqtl_coloc_pt <- stack_prop_onebar(
+  df           = plot_df_eqtl,
+  fill_var     = coloc_status,
+  title        = "% eQTL coloc",
+  legend_title = "Coloc status"
+) +
+  geom_text(
+    data = plot_df_eqtl,
+    aes(label = label),
+    position = position_fill(vjust = 0.5),
+    size = 3
+  ) +
+  scale_fill_manual(
+    values = qtl_cmap_coloc2[c("coloc", "eQTL_only")],
+    drop   = FALSE
+  )
+
+eqtl_coloc_pt
+
+# ======================================================================
+# B) caQTL coloc percent by category (stacked bars)
+# ======================================================================
+desired_cats  <- c("in_caPeak","in_other_Peak","no_Peak_overlap")
+status_levels <- c("coloc", "caQTL_only")
+
+caqtl_df0 <- caqtl_df0 %>%
+  mutate(
+    caqtl_category = if_else(cs_type_any_var %in% c("in_other_Peak", "in_corr_Peak"),
+                             "in_other_Peak", cs_type_any_var),
+    caqtl_category = factor(caqtl_category, levels = desired_cats),
+    coloc_status   = factor(coloc_status, levels = status_levels)
+  )
+
+plot_df_caqtl_stack <- caqtl_df0 %>%
+  distinct(finemapped_cs_caqtl, coloc_status, caqtl_category) %>%
+  dplyr::count(caqtl_category, coloc_status, name = "n") %>%
+  complete(caqtl_category, coloc_status, fill = list(n = 0L)) %>%
+  group_by(caqtl_category) %>%
+  mutate(
+    prop  = n / sum(n),
+    label = paste0(n, " (", percent(prop, accuracy = 0.1), ")")
+  ) %>%
+  ungroup() %>%
+  mutate(caqtl_category = factor(caqtl_category, levels = rev(desired_cats)))  # flipped order for coord_flip
+
+plot_df_caqtl_stack_lab <- plot_df_caqtl_stack %>% filter(prop >= 0.06)
+
+caqtl_coloc_stack_pt <- stack_prop_by_group(
+  df           = plot_df_caqtl_stack,
+  x_var        = caqtl_category,
+  fill_var     = coloc_status,
+  title        = "% caQTL coloc by category",
+  legend_title = "Coloc status"
+) +
+  geom_text(
+    data = plot_df_caqtl_stack_lab,
+    aes(label = label),
+    position = position_fill(vjust = 0.5, reverse = TRUE),
+    size = 3
+  ) +
+  scale_fill_manual(values = qtl_cmap_coloc2[status_levels], drop = FALSE) +
+  scale_y_continuous(limits = c(0, 1), expand = expansion(mult = c(0, 0.05)))
+
+
+# ======================================================================
+# C) Supplement: % coloc bars with pairwise BH-adjusted q-values
+# ======================================================================
+
+plot_df_pairwise <- plot_df_caqtl_stack %>%
+  dplyr::transmute(
+    caqtl_category = factor(
+      caqtl_category,
+      levels = desired_cats
+    ),
+    coloc_status = factor(
+      coloc_status,
+      levels = status_levels
+    ),
+    n = n
+  )
+
+# Global comparison
+out <- coloc_only_global(plot_df_pairwise)
+
+coloc_counts_tbl <- out$coloc_counts %>%
+  dplyr::mutate(
+    caqtl_category = factor(
+      caqtl_category,
+      levels = desired_cats
+    ),
+    pct_label = scales::percent(
+      prop_coloc,
+      accuracy = 0.1
+    )
+  ) %>%
+  dplyr::arrange(caqtl_category)
+
+global_coloc_test <- out$global_test
+
+x2 <- unname(global_coloc_test$statistic)
+test_df <- unname(global_coloc_test$parameter)
+
+p_exact <- stats::pchisq(
+  x2,
+  df = test_df,
+  lower.tail = FALSE
+)
+
+sprintf(
+  "Pearson’s χ²(%d) = %.2f, p = %.2e",
+  test_df,
+  x2,
+  p_exact
+)
+
+
+caqtl_coloc_stack_pt
+
+
+```

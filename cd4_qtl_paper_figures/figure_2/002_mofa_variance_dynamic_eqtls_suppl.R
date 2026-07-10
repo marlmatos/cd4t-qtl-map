@@ -8,10 +8,10 @@ options(bitmapType="cairo")
 
 
 
-model34 <- load_model("/gchm/cd4_CellRegMap/001_preprocessing/results_01312025/mofa_factors/mofa_trained/cd4_aging_filt_sce_mofa_expectations_res34.hdf5")
-model4 <- load_model("/gchm/cd4_CellRegMap/001_preprocessing/results_01312025/mofa_factors/mofa_trained/cd4_aging_filt_sce_mofa_expectations_res4.hdf5")
-model45 <- load_model("/gchm/cd4_CellRegMap/001_preprocessing/results_01312025/mofa_factors/mofa_trained/cd4_aging_filt_sce_mofa_expectations_res45.hdf5")
-model5 <- load_model("/gchm/cd4_CellRegMap/001_preprocessing/results_01312025/mofa_factors/mofa_trained/cd4_aging_filt_sce_mofa_expectations_res5.hdf5")
+model34 <- load_model(fig2_paths$model34_file)
+model4 <- load_model(fig2_paths$model4_file)
+model45 <- load_model(fig2_paths$model45_file)
+model5 <- load_model(fig2_paths$model5_file)
 
 head(model34@cache$variance_explained$r2_per_factor) # group 1
 head(model4@cache$variance_explained$r2_per_factor) # group 1

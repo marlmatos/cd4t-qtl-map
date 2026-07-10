@@ -1,0 +1,1286 @@
+---
+title: "plotting_nb_figure_4"
+author: "Marliette Matos"
+output: html_notebook
+---
+```{r figure-4-upset, message=FALSE, warning=FALSE, fig.width=8, fig.height=8}
+# Figure 2: ChromBPNet, eQTL, and caQTL overlap
+source("config.local.R")
+
+.libPaths(c(
+  r_lib_path_44,
+  "/nfs/sw/easybuild/software/R/4.4.1-gfbf-2023b/lib/R/library"
+))
+
+# ------------------------------------------------------------------------------
+# Packages and configuration
+# ------------------------------------------------------------------------------
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(stringr)
+library(forcats)
+library(ggplot2)
+library(scales)
+library(GenomicRanges)
+library(IRanges)
+library(S4Vectors)
+library(ComplexUpset)
+library(rcartocolor)
+library(patchwork)
+library(cowplot)
+library(broom)
+
+options(bitmapType = "cairo")
+
+# ------------------------------------------------------------------------------
+# Helper functions
+# ------------------------------------------------------------------------------
+
+# Convert QTL variant IDs such as 10:5913362[b38]A,G to chr10_5913362_A_G.
+to_chrombpnet_id <- function(x) {
+  stringr::str_replace(
+    x,
+    "^([0-9XYM]+):([0-9]+)\\[b38\\]([ACGT]+),([ACGT]+)$",
+    "chr\\1_\\2_\\3_\\4"
+  )
+}
+
+
+# Standardize either chr10_3126444_C_T or 10:3126444[b38]C,T.
+normalize_variant_id <- function(x) {
+  x <- trimws(x)
+  output <- rep(NA_character_, length(x))
+
+  underscore_match <- stringr::str_match(
+    x,
+    "^(?:chr)?([0-9XYM]{1,2})_([0-9]+)_([ACGTacgt]+)_([ACGTacgt]+)$"
+  )
+
+  underscore_rows <- !is.na(underscore_match[, 1])
+
+  output[underscore_rows] <- paste0(
+    "chr",
+    underscore_match[underscore_rows, 2],
+    "_",
+    underscore_match[underscore_rows, 3],
+    "_",
+    toupper(underscore_match[underscore_rows, 4]),
+    "_",
+    toupper(underscore_match[underscore_rows, 5])
+  )
+
+  b38_match <- stringr::str_match(
+    x,
+    paste0(
+      "^(?:chr)?([0-9XYM]{1,2}):([0-9]+)",
+      "(?:\\[b[0-9]+\\])?([ACGTacgt]+),([ACGTacgt]+)$"
+    )
+  )
+
+  b38_rows <- !is.na(b38_match[, 1]) & is.na(output)
+
+  output[b38_rows] <- paste0(
+    "chr",
+    b38_match[b38_rows, 2],
+    "_",
+    b38_match[b38_rows, 3],
+    "_",
+    toupper(b38_match[b38_rows, 4]),
+    "_",
+    toupper(b38_match[b38_rows, 5])
+  )
+
+  output
+}
+
+
+# Convert chr10_3126444_C_T to 10:3126444[b38]C,T.
+to_b38_variant_id <- function(x, build = "b38") {
+  variant_match <- stringr::str_match(
+    x,
+    stringr::regex(
+      paste0(
+        "^(?:chr)?([0-9]{1,2}|X|Y|M|MT)",
+        "[_:-]([0-9]+)[_:-]([^_:-]+)[_:-]([^_:-]+)$"
+      ),
+      ignore_case = TRUE
+    )
+  )
+
+  chromosome <- toupper(variant_match[, 2])
+  chromosome[chromosome == "M"] <- "MT"
+
+  position <- variant_match[, 3]
+  reference <- toupper(variant_match[, 4])
+  alternate <- toupper(variant_match[, 5])
+
+  ifelse(
+    is.na(chromosome),
+    NA_character_,
+    paste0(
+      chromosome,
+      ":",
+      position,
+      "[",
+      build,
+      "]",
+      reference,
+      ",",
+      alternate
+    )
+  )
+}
+
+# ------------------------------------------------------------------------------
+# Load QTL and ChromBPNet data
+# ------------------------------------------------------------------------------
+
+qtl_summary <- readr::read_delim(
+  paths_figure4$summary_path,
+  show_col_types = FALSE
+) %>%
+  dplyr::mutate(
+    caqtl_category = ifelse(
+      cs_type_any_var %in% c("in_other_Peak", "in_corr_Peak"),
+      "in_other_Peak",
+      cs_type_any_var
+    )
+  )
+chrombpnet_variants <- readr::read_tsv(
+  paths_figure4$chrombpnet_variant_path,
+  show_col_types = FALSE
+) %>%
+  dplyr::select(
+    chr,
+    pos,
+    allele1,
+    allele2,
+    variant_id
+  )
+
+motif_variants <- readr::read_tsv(
+  paths_figure4$motif_path,
+  show_col_types = FALSE
+)
+
+chrombpnet_variants <- chrombpnet_variants %>%
+  dplyr::left_join(
+    motif_variants %>%
+      dplyr::select(
+        variant_id,
+        category
+      ),
+    by = "variant_id"
+  ) %>%
+  dplyr::mutate(
+    motif_overlap = !is.na(category)
+  )
+
+# ------------------------------------------------------------------------------
+# Identify QTL credible sets containing ChromBPNet variants
+# ------------------------------------------------------------------------------
+
+chrombpnet_caqtl_sets <- qtl_summary %>%
+  dplyr::mutate(
+    chrombpnet_id = to_chrombpnet_id(variant_id.x)
+  ) %>%
+  dplyr::semi_join(
+    chrombpnet_variants,
+    by = c("chrombpnet_id" = "variant_id")
+  ) %>%
+  dplyr::filter(!is.na(finemapped_cs_coloc)) %>%
+  dplyr::distinct(finemapped_cs_coloc)
+
+chrombpnet_eqtl_sets <- qtl_summary %>%
+  dplyr::mutate(
+    chrombpnet_id = to_chrombpnet_id(variant_id.y)
+  ) %>%
+  dplyr::semi_join(
+    chrombpnet_variants,
+    by = c("chrombpnet_id" = "variant_id")
+  ) %>%
+  dplyr::filter(!is.na(finemapped_cs_coloc)) %>%
+  dplyr::distinct(finemapped_cs_coloc)
+
+chrombpnet_caqtl_motif_sets <- qtl_summary %>%
+  dplyr::mutate(
+    chrombpnet_id = to_chrombpnet_id(variant_id.x)
+  ) %>%
+  dplyr::semi_join(
+    chrombpnet_variants %>%
+      dplyr::filter(motif_overlap),
+    by = c("chrombpnet_id" = "variant_id")
+  ) %>%
+  dplyr::filter(!is.na(finemapped_cs_coloc)) %>%
+  dplyr::distinct(finemapped_cs_coloc)
+
+chrombpnet_eqtl_motif_sets <- qtl_summary %>%
+  dplyr::mutate(
+    chrombpnet_id = to_chrombpnet_id(variant_id.y)
+  ) %>%
+  dplyr::semi_join(
+    chrombpnet_variants %>%
+      dplyr::filter(motif_overlap),
+    by = c("chrombpnet_id" = "variant_id")
+  ) %>%
+  dplyr::filter(!is.na(finemapped_cs_coloc)) %>%
+  dplyr::distinct(finemapped_cs_coloc)
+
+chrombpnet_qtl_variants <- dplyr::bind_rows(
+  qtl_summary %>%
+    dplyr::transmute(
+      variant_id = to_chrombpnet_id(variant_id.x)
+    ),
+  qtl_summary %>%
+    dplyr::transmute(
+      variant_id = to_chrombpnet_id(variant_id.y)
+    )
+) %>%
+  dplyr::filter(!is.na(variant_id)) %>%
+  dplyr::semi_join(
+    chrombpnet_variants,
+    by = "variant_id"
+  ) %>%
+  dplyr::distinct(variant_id) %>%
+  dplyr::pull(variant_id)
+
+chrombpnet_supported_sets <- dplyr::bind_rows(
+  chrombpnet_caqtl_sets,
+  chrombpnet_eqtl_sets
+) %>%
+  dplyr::distinct(finemapped_cs_coloc) %>%
+  dplyr::pull(finemapped_cs_coloc)
+
+chrombpnet_motif_supported_sets <- dplyr::bind_rows(
+  chrombpnet_caqtl_motif_sets,
+  chrombpnet_eqtl_motif_sets
+) %>%
+  dplyr::distinct(finemapped_cs_coloc) %>%
+  dplyr::pull(finemapped_cs_coloc)
+
+message(
+  "Number of QTL credible sets containing a ChromBPNet variant: ",
+  length(chrombpnet_supported_sets)
+)
+
+# ------------------------------------------------------------------------------
+# Construct the credible-set membership table
+# ------------------------------------------------------------------------------
+
+chrombpnet_only <- chrombpnet_variants %>%
+  dplyr::filter(
+    !variant_id %in% chrombpnet_qtl_variants
+  ) %>%
+  dplyr::transmute(
+    variant_id,
+    coloc_status = NA_character_,
+    caqtl_category = NA_character_,
+    motif_overlap
+  )
+
+credible_sets <- qtl_summary %>%
+  dplyr::distinct(
+    finemapped_cs_coloc,
+    coloc_status,
+    caqtl_category
+  ) %>%
+  dplyr::filter(
+    !is.na(finemapped_cs_coloc)
+  ) %>%
+  dplyr::rename(
+    variant_id = finemapped_cs_coloc
+  ) %>%
+  dplyr::mutate(
+    motif_overlap = NA
+  ) %>%
+  dplyr::bind_rows(chrombpnet_only) %>%
+  dplyr::mutate(
+    is_chrombpnet_only = is.na(coloc_status),
+
+    chromBPNet = dplyr::if_else(
+      is_chrombpnet_only,
+      TRUE,
+      variant_id %in% chrombpnet_supported_sets
+    ),
+
+    chromBPNet_motif = dplyr::if_else(
+      is_chrombpnet_only,
+      dplyr::coalesce(motif_overlap, FALSE),
+      variant_id %in% chrombpnet_motif_supported_sets
+    ),
+
+    type = dplyr::case_when(
+      coloc_status == "coloc" &
+        chromBPNet ~ "shared_all",
+
+      coloc_status == "coloc" ~ "coloc",
+
+      coloc_status == "caQTL_only" &
+        chromBPNet ~ "shared_chrom_caqtl",
+
+      coloc_status == "eQTL_only" &
+        chromBPNet ~ "shared_chrom_eqtl",
+
+      coloc_status == "caQTL_only" ~ "caQTL_only",
+      coloc_status == "eQTL_only" ~ "eQTL_only",
+
+      TRUE ~ "chromBPNet_only"
+    )
+  ) %>%
+  dplyr::select(
+    -is_chrombpnet_only,
+    -motif_overlap
+  )
+
+# ------------------------------------------------------------------------------
+# Create UpSet membership table
+# ------------------------------------------------------------------------------
+
+membership_data <- credible_sets %>%
+  dplyr::mutate(
+    eQTL = type %in% c(
+      "shared_all",
+      "coloc",
+      "shared_chrom_eqtl",
+      "eQTL_only"
+    ),
+    caQTL = type %in% c(
+      "shared_all",
+      "coloc",
+      "shared_chrom_caqtl",
+      "caQTL_only"
+    ),
+    chromBPNet = type %in% c(
+      "shared_all",
+      "shared_chrom_eqtl",
+      "shared_chrom_caqtl",
+      "chromBPNet_only"
+    )
+  ) %>%
+  dplyr::select(
+    variant_id,
+    caqtl_category,
+    eQTL,
+    caQTL,
+    chromBPNet,
+    chromBPNet_motif
+  ) %>%
+  dplyr::mutate(
+    dplyr::across(
+      c(eQTL, caQTL, chromBPNet),
+      as.logical
+    )
+  )
+
+caqtl_label_map <- c(
+  in_caPeak = "Within caQTL peak",
+  in_other_Peak = "In other open peak",
+  no_Peak_overlap = "No peak overlap"
+)
+
+membership_data <- membership_data %>%
+  dplyr::mutate(
+    caqtl_category = factor(
+      caqtl_category,
+      levels = names(caqtl_label_map),
+      labels = caqtl_label_map
+    )
+  )
+
+caqtl_colors <- rcartocolor::carto_pal(
+  n = 3,
+  name = "Mint"
+)
+
+names(caqtl_colors) <- unname(caqtl_label_map)
+
+# ------------------------------------------------------------------------------
+# Define and order displayed intersections
+# ------------------------------------------------------------------------------
+
+membership_data <- membership_data %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(
+    intersection = {
+      active_sets <- c(
+        chromBPNet = chromBPNet,
+        eQTL = eQTL,
+        caQTL = caQTL
+      )
+
+      active_names <- names(active_sets)[active_sets]
+
+      if (length(active_names) == 0) {
+        "None"
+      } else {
+        paste(active_names, collapse = " & ")
+      }
+    }
+  ) %>%
+  dplyr::ungroup()
+
+n_intersections <- 7
+
+intersection_counts <- membership_data %>%
+  dplyr::count(
+    intersection,
+    name = "total"
+  ) %>%
+  dplyr::arrange(
+    dplyr::desc(total)
+  ) %>%
+  dplyr::slice_head(
+    n = n_intersections
+  )
+
+displayed_intersections <- intersection_counts$intersection
+
+intersection_list <- lapply(
+  displayed_intersections,
+  function(intersection_name) {
+    sets <- strsplit(
+      intersection_name,
+      " & ",
+      fixed = TRUE
+    )[[1]]
+
+    sets[sets != "None"]
+  }
+)
+
+# ------------------------------------------------------------------------------
+# In-peak caQTL-category annotation
+# ------------------------------------------------------------------------------
+
+in_peak_levels <- c(
+  "Within caQTL peak",
+  "In other open peak"
+)
+
+in_peak_colors <- caqtl_colors[in_peak_levels]
+
+intersection_totals <- membership_data %>%
+  dplyr::filter(
+    intersection %in% displayed_intersections
+  ) %>%
+  dplyr::count(
+    intersection,
+    name = "total_all"
+  )
+
+in_peak_annotation <- membership_data %>%
+  dplyr::filter(
+    intersection %in% displayed_intersections,
+    caqtl_category %in% in_peak_levels
+  ) %>%
+  dplyr::count(
+    intersection,
+    caqtl_category,
+    name = "n"
+  ) %>%
+  tidyr::complete(
+    intersection = displayed_intersections,
+    caqtl_category = factor(
+      in_peak_levels,
+      levels = in_peak_levels
+    ),
+    fill = list(n = 0L)
+  ) %>%
+  dplyr::group_by(intersection) %>%
+  dplyr::mutate(
+    total_in_peak = sum(n),
+    proportion = dplyr::if_else(
+      total_in_peak > 0,
+      n / total_in_peak,
+      NA_real_
+    )
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::left_join(
+    intersection_totals,
+    by = "intersection"
+  ) %>%
+  dplyr::mutate(
+    intersection = factor(
+      intersection,
+      levels = displayed_intersections
+    ),
+    caqtl_category = factor(
+      caqtl_category,
+      levels = in_peak_levels
+    )
+  )
+
+in_peak_labels <- in_peak_annotation %>%
+  dplyr::distinct(
+    intersection,
+    total_in_peak,
+    total_all
+  ) %>%
+  dplyr::mutate(
+    label = paste0(
+      scales::comma(total_in_peak),
+      " / ",
+      scales::comma(total_all)
+    ),
+    y = 0.90
+  )
+
+empty_in_peak_bars <- in_peak_labels %>%
+  dplyr::filter(
+    total_in_peak == 0
+  ) %>%
+  dplyr::transmute(
+    intersection,
+    proportion = 1
+  )
+
+in_peak_plot <- ggplot2::ggplot() +
+  ggplot2::geom_col(
+    data = empty_in_peak_bars,
+    ggplot2::aes(
+      x = intersection,
+      y = proportion
+    ),
+    width = 0.9,
+    fill = "grey85",
+    color = "grey30",
+    linewidth = 0.1,
+    inherit.aes = FALSE
+  ) +
+  ggplot2::geom_col(
+    data = in_peak_annotation %>%
+      dplyr::filter(
+        is.finite(proportion)
+      ),
+    ggplot2::aes(
+      x = intersection,
+      y = proportion,
+      fill = caqtl_category
+    ),
+    width = 0.9,
+    inherit.aes = FALSE
+  ) +
+  ggplot2::geom_text(
+    data = in_peak_labels,
+    ggplot2::aes(
+      x = intersection,
+      y = y,
+      label = label
+    ),
+    inherit.aes = FALSE,
+    size = 3
+  ) +
+  ggplot2::scale_x_discrete(
+    limits = displayed_intersections,
+    drop = FALSE
+  ) +
+  ggplot2::scale_y_continuous(
+    labels = scales::label_percent(),
+    limits = c(0, 1),
+    expand = c(0, 0)
+  ) +
+  ggplot2::scale_fill_manual(
+    values = in_peak_colors,
+    name = "caQTL category\n(in-peak only)",
+    drop = TRUE
+  ) +
+  ggplot2::labs(
+    x = NULL,
+    y = "Proportion"
+  ) +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    legend.position = "right",
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    panel.grid.major.x = ggplot2::element_blank(),
+    plot.margin = ggplot2::margin(5, 10, 0, 10)
+  )
+
+# ------------------------------------------------------------------------------
+# UpSet plot
+# ------------------------------------------------------------------------------
+set_sizes = (
+  ComplexUpset::upset_set_size() +
+    ggplot2::geom_text(
+      ggplot2::aes(
+        label = paste0(
+          round(ggplot2::after_stat(count) / 1000),
+          "K"
+        )
+      ),
+      hjust = 1.1,
+      stat = "count"
+    )
+)
+
+upset_base <- ComplexUpset::upset(
+  membership_data,
+  intersect = c(
+    "chromBPNet",
+    "eQTL",
+    "caQTL"
+  ),
+  intersections = intersection_list,
+  sort_intersections = FALSE,
+  wrap = TRUE,
+  width_ratio = 0.10,
+
+  base_annotations = list(
+    "Intersection size" =
+      ComplexUpset::intersection_size()
+  ),
+
+  annotations = list(),
+
+  set_sizes = (
+    ComplexUpset::upset_set_size() +
+      ggplot2::geom_text(
+        ggplot2::aes(
+          label = paste0(
+            round(ggplot2::after_stat(count) / 1000),
+            "K"
+          )
+        ),
+        hjust = 1.1,
+        stat = "count"
+      )
+  ),
+
+  queries = list(
+    ComplexUpset::upset_query(
+      set = "caQTL",
+      fill = "#287274",
+      color = "#287274"
+    ),
+    ComplexUpset::upset_query(
+      set = "eQTL",
+      fill = "#C70E7B",
+      color = "#C70E7B"
+    ),
+    ComplexUpset::upset_query(
+      set = "chromBPNet",
+      fill = "#2CB11B",
+      color = "#2CB11B"
+    )
+  )
+)
+
+# ------------------------------------------------------------------------------
+# Add MAF information
+# ------------------------------------------------------------------------------
+
+all_variants <- readr::read_csv(
+  paths_figure4$all_variants_path,
+  show_col_types = FALSE
+) %>%
+  dplyr::mutate(
+    variant_id_standardized = normalize_variant_id(var_id),
+    finemapped_cs_coloc = dplyr::coalesce(
+      finemapped_cs_coloc,
+      variant_id_standardized
+    ),
+    variant_id_plink = to_b38_variant_id(
+      variant_id_standardized
+    )
+  )
+
+maf_data <- data.table::fread(
+  paths_figure4$maf_path,
+  showProgress = FALSE
+) %>%
+  tibble::as_tibble()
+
+all_variants <- all_variants %>%
+  dplyr::left_join(
+    maf_data,
+    by = c("variant_id_plink" = "SNP")
+  )
+
+group_to_intersection <- c(
+  caQTL_only = "caQTL",
+  eQTL_caQTL = "eQTL & caQTL",
+  chromBPNet_only = "chromBPNet",
+  all_three = "chromBPNet & eQTL & caQTL",
+  chromBPNet_caQTL = "chromBPNet & caQTL",
+  eQTL_only = "eQTL",
+  chromBPNet_eQTL = "chromBPNet & eQTL"
+)
+
+all_variants <- all_variants %>%
+  dplyr::mutate(
+    intersection = dplyr::recode(
+      group,
+      !!!group_to_intersection
+    ),
+    intersection = factor(
+      intersection,
+      levels = displayed_intersections
+    )
+  )
+
+maf_plot_data <- all_variants %>%
+  dplyr::filter(
+    !is.na(MAF),
+    !is.na(intersection)
+  ) %>%
+  dplyr::group_by(
+    intersection,
+    variant_id_standardized
+  ) %>%
+  dplyr::summarise(
+    MAF = dplyr::first(MAF),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    MAF_bin = ggplot2::cut_number(
+      MAF,
+      n = 5
+    ),
+    MAF_bin = forcats::fct_rev(MAF_bin)
+  )
+
+maf_plot <- ggplot2::ggplot(
+  maf_plot_data,
+  ggplot2::aes(
+    x = intersection,
+    fill = MAF_bin
+  )
+) +
+  ggplot2::geom_bar(
+    position = "fill",
+    linewidth = 0.1,
+    color = "grey30"
+  ) +
+  ggplot2::scale_fill_brewer(
+    palette = "GnBu",
+    name = "MAF bin",
+    direction = -1,
+    drop = FALSE
+  ) +
+  ggplot2::labs(
+    x = NULL,
+    y = "Proportion"
+  ) +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    panel.grid.major.x = ggplot2::element_blank()
+  )
+
+# ------------------------------------------------------------------------------
+# Add cis-regulatory-element annotations
+# ------------------------------------------------------------------------------
+
+cre_annotations <- readRDS(
+  paths_figure4$cre_annotation_path
+)
+
+cre_ranges <- GenomicRanges::GRanges(
+  seqnames = cre_annotations$chr,
+  ranges = IRanges::IRanges(
+    start = as.integer(cre_annotations$start),
+    end = as.integer(cre_annotations$end)
+  ),
+  peak_name = cre_annotations$peak_name,
+  annotation = cre_annotations$annotation
+)
+
+all_variants <- all_variants %>%
+  dplyr::mutate(
+    row_id = dplyr::row_number()
+  )
+
+parsed_variants <- stringr::str_match(
+  all_variants$variant_id_standardized,
+  "^(chr[0-9XYM]+)_([0-9]+)_([ACGT]+)_([ACGT]+)$"
+)
+
+parsed_rows <- !is.na(parsed_variants[, 1])
+
+variant_ranges <- GenomicRanges::GRanges(
+  seqnames = parsed_variants[parsed_rows, 2],
+  ranges = IRanges::IRanges(
+    start = as.integer(parsed_variants[parsed_rows, 3]),
+    end = as.integer(parsed_variants[parsed_rows, 3])
+  ),
+  row_id = all_variants$row_id[parsed_rows]
+)
+
+first_hits <- GenomicRanges::findOverlaps(
+  variant_ranges,
+  cre_ranges,
+  ignore.strand = TRUE,
+  select = "first"
+)
+
+variant_annotation <- rep(
+  NA_character_,
+  length(variant_ranges)
+)
+
+matched_rows <- !is.na(first_hits)
+
+variant_annotation[matched_rows] <- as.character(
+  S4Vectors::mcols(cre_ranges)$annotation[
+    first_hits[matched_rows]
+  ]
+)
+
+annotation_map <- tibble::tibble(
+  row_id = S4Vectors::mcols(variant_ranges)$row_id,
+  annotation_cre = variant_annotation
+)
+
+all_variants_annotated <- all_variants %>%
+  dplyr::left_join(
+    annotation_map,
+    by = "row_id",
+    relationship = "one-to-one"
+  ) %>%
+  dplyr::mutate(
+    variant_annotation = dplyr::case_when(
+      stringr::str_detect(
+        annotation_cre,
+        stringr::regex(
+          "promoter",
+          ignore_case = TRUE
+        )
+      ) ~ "promoter",
+
+      stringr::str_detect(
+        annotation_cre,
+        stringr::regex(
+          "distal",
+          ignore_case = TRUE
+        )
+      ) ~ "distal",
+
+      TRUE ~ NA_character_
+    )
+  )
+
+credible_set_annotation <- all_variants_annotated %>%
+  dplyr::filter(
+    !is.na(variant_annotation)
+  ) %>%
+  dplyr::count(
+    finemapped_cs_coloc,
+    variant_annotation,
+    name = "n"
+  ) %>%
+  dplyr::group_by(
+    finemapped_cs_coloc
+  ) %>%
+  dplyr::slice_max(
+    order_by = n,
+    n = 1,
+    with_ties = FALSE
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::transmute(
+    finemapped_cs_coloc,
+    credible_set_annotation = factor(
+      variant_annotation,
+      levels = c(
+        "promoter",
+        "distal"
+      )
+    )
+  ) %>%
+  dplyr::right_join(
+    all_variants_annotated %>%
+      dplyr::distinct(
+        finemapped_cs_coloc
+      ),
+    by = "finemapped_cs_coloc"
+  ) %>%
+  dplyr::mutate(
+    credible_set_annotation =
+      forcats::fct_explicit_na(
+        credible_set_annotation,
+        na_level = "Unannotated"
+      )
+  )
+
+all_variants_annotated <- all_variants_annotated %>%
+  dplyr::left_join(
+    credible_set_annotation,
+    by = "finemapped_cs_coloc"
+  ) %>%
+  dplyr::mutate(
+    intersection = dplyr::recode(
+      group,
+      !!!group_to_intersection
+    ),
+    intersection = factor(
+      intersection,
+      levels = displayed_intersections
+    )
+  )
+
+cre_plot <- all_variants_annotated %>%
+  dplyr::filter(
+    !is.na(intersection)
+  ) %>%
+  dplyr::count(
+    intersection,
+    credible_set_annotation,
+    name = "n"
+  ) %>%
+  ggplot2::ggplot(
+    ggplot2::aes(
+      x = intersection,
+      y = n,
+      fill = credible_set_annotation
+    )
+  ) +
+  ggplot2::geom_col(
+    position = "fill",
+    linewidth = 0.1,
+    color = "grey30"
+  ) +
+  ggplot2::scale_y_continuous(
+    labels = scales::label_percent()
+  ) +
+  ggplot2::scale_fill_brewer(
+    palette = "BrBG",
+    direction = -1,
+    name = "CRE annotation"
+  ) +
+  ggplot2::labs(
+    x = NULL,
+    y = "Proportion"
+  ) +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    panel.grid.major.x = ggplot2::element_blank()
+  )
+
+# ------------------------------------------------------------------------------
+# Combine panels
+# ------------------------------------------------------------------------------
+
+upset_sharing4 <- (
+  maf_plot /
+    cre_plot /
+    in_peak_plot /
+    upset_base
+) +
+  patchwork::plot_layout(
+    heights = c(1, 1, 1, 4),
+    guides = "collect"
+  )
+
+print(upset_sharing4)
+
+
+upset_base
+maf_plot
+in_peak_plot
+cre_plot
+```
+
+
+```{r ChromBPNet-molQTL, message=FALSE, warning=FALSE, fig.width=8, fig.height=8}
+library(dplyr)
+library(ggrastr)
+library(ggplot2)
+library(tidyr)
+library(scales)
+library(readr)
+library(stringr)
+options(bitmapType = "cairo")
+
+#--------------
+homedir="~/cd4_qtl_paper_figures/figure_2_chrombpnet/"
+
+cBPNet_var<-read.delim2("/gpfs/commons/home/mmatos/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores/average_cd4_tcells_AJ_common_variants.mean.variant_scores.tsv") %>% distinct()
+
+credible_sets<-readRDS("~/cd4_qtl_paper_figures/figure_1/data/upset_credible_sets_withchrombpnet_vars.rds")
+
+table(credible_sets$type)
+
+#interceptions from the upset plot
+#  caQTL_only    chromBPNet_only              coloc          eQTL_only         shared_all shared_chrom_caqtl  shared_chrom_eqtl 
+#  27026               7493              13253               2310               5056               3459                145   ## variant sharing instances at the level of credibel sets
+
+
+#some credible sets contain more than one ChromBPNet Variant, but are counted as one instance
+cs_vars <- credible_sets %>% pull(chrombpnet_variants) 
+cs_vars<- unique(trimws(unlist(strsplit(cs_vars, ",")))) # at the end this are all the ChromBPNet variants 
+
+#nominal molQTL effect for all variants tested in ChromBPNet
+eqtl_nominal <-read_csv(paste0(homedir, "data/CD4T_eQTL_nomical_assoc_inpeak_vars.csv")) %>% filter(var_id %in% cs_vars) %>% select(var_id, slope, phenotype_id) 
+caqtl_nominal <-read_csv(paste0(homedir, "data/CD4T_caQTL_nomical_assoc_inpeak_vars.csv")) %>% filter(var_id %in% cs_vars) %>% select(var_id, slope, phenotype_id)
+
+#change colnames
+colnames(eqtl_nominal) <- c("var_id", "eqtl_slope", "eqtl_feature")
+colnames(caqtl_nominal) <- c("var_id", "caqtl_slope", "caqtl_feature")
+
+
+#parse feature names from the credible set inteceptions
+credible_sets_features <- credible_sets %>%
+  mutate(
+    peak_name = case_when(
+      coloc_status == "coloc" ~
+        str_extract(variant_id, "^cd4_atac_summits_peak_\\d+[A-Za-z]*"),
+      coloc_status == "caQTL_only" ~
+        str_extract(variant_id, "^cd4_atac_summits_peak_\\d+[A-Za-z]*"),
+      TRUE ~ NA_character_
+    ),
+    gene_name = case_when(
+      coloc_status == "coloc" ~
+        str_match(
+          variant_id,
+          "^cd4_atac_summits_peak_\\d+[A-Za-z]*_[^_]+_[^_]+_([^_]+)_[0-9XYM]+:[0-9-]+_\\d+$"
+        )[, 2],
+      coloc_status == "eQTL_only" ~
+        str_match(variant_id, "^(.+?)_[0-9XYM]+:[0-9-]+_\\d+$")[, 2],
+      TRUE ~ NA_character_
+    )
+  )
+
+check_duplicate_coordinates <- function(df, xvar, yvar, digits = NULL) {
+  
+  plot_df <- df %>%
+    filter(
+      !is.na(.data[[xvar]]),
+      !is.na(.data[[yvar]])
+    )
+  
+  # If digits is provided, check duplicates after rounding
+  if (!is.null(digits)) {
+    plot_df <- plot_df %>%
+      mutate(
+        x_coord = round(.data[[xvar]], digits),
+        y_coord = round(.data[[yvar]], digits)
+      )
+  } else {
+    plot_df <- plot_df %>%
+      mutate(
+        x_coord = .data[[xvar]],
+        y_coord = .data[[yvar]]
+      )
+  }
+  
+  dup_coords <- plot_df %>%
+    count(x_coord, y_coord, name = "n_points") %>%
+    filter(n_points > 1) %>%
+    arrange(desc(n_points))
+  
+  return(dup_coords)
+}
+#### building qtl_id for merging 
+## please note: since a credible set might contain more than one ChromBPNet variant, then upon "separating rows" the number of rows
+##              expands, and the df becomes intercept instances at the level of variants
+
+credible_sets_features<-credible_sets_features %>%
+  separate_rows(chrombpnet_variants, sep = ",") %>%
+  mutate(
+    chrombpnet_variants = na_if(trimws(chrombpnet_variants), "NA"),
+    eqtl_id = case_when(
+      is.na(chrombpnet_variants) | is.na(gene_name) ~ NA_character_,
+      TRUE ~ paste0(chrombpnet_variants, "_", gene_name)
+    ),
+    caqtl_id = case_when(
+      is.na(chrombpnet_variants) | is.na(peak_name) ~ NA_character_,
+      TRUE ~ paste0(chrombpnet_variants, "_", peak_name)
+    )
+  )  
+
+eqtl_nominal<-eqtl_nominal %>% mutate(eqtl_id =paste0(var_id, "_", eqtl_feature))
+
+caqtl_nominal<-caqtl_nominal %>% mutate(caqtl_id =paste0(var_id, "_", caqtl_feature))
+
+cBPNet_var<-cBPNet_var %>% select(variant_id, logfc.mean)
+
+
+#merge
+
+credible_sets_features <- credible_sets_features %>%
+  left_join(eqtl_nominal, by = "eqtl_id") %>%
+  left_join(caqtl_nominal, by = "caqtl_id") %>%
+  left_join(cBPNet_var, by = c("chrombpnet_variants" = "variant_id")) %>%
+  mutate(
+    logfc.mean  = as.numeric(logfc.mean),
+    caqtl_slope = as.numeric(caqtl_slope),
+    eqtl_slope  = as.numeric(eqtl_slope)
+  )
+
+###-------------merging QC-----------
+
+merged_check <- credible_sets_features %>%
+  mutate(
+    missing_eqtl_merge = !is.na(eqtl_id) & is.na(eqtl_slope),
+    missing_caqtl_merge = !is.na(caqtl_id) & is.na(caqtl_slope),
+    missing_bpnet_merge = !is.na(chrombpnet_variants) & is.na(logfc.mean)
+  )
+merged_check %>%
+  summarise(
+    missing_eqtl_merge = sum(missing_eqtl_merge, na.rm = TRUE),
+    missing_caqtl_merge = sum(missing_caqtl_merge, na.rm = TRUE),
+    missing_bpnet_merge = sum(missing_bpnet_merge, na.rm = TRUE)
+  )
+
+eqtl_missing_keys <- credible_sets_features %>% #dropouts due to eQTL/caQTL colocalization #the variant dues exits in the eQTL nominal becuase it came from the caQTL CSs
+  mutate(eqtl_in_table = eqtl_id %in% eqtl_nominal$eqtl_id) %>%
+  filter(!is.na(eqtl_id), !eqtl_in_table) %>%
+  distinct(variant_id, eqtl_id, gene_name, chrombpnet_variants, type, coloc_status)
+
+caqtl_missing_keys <- credible_sets_features %>% #drops outs due to eQTL/caQTL colocalization #the variant dues exits in the caQTL nominal becuase it came from the caQTL CSs
+  mutate(caqtl_in_table = caqtl_id %in% caqtl_nominal$caqtl_id) %>%
+  filter(!is.na(caqtl_id), !caqtl_in_table) %>%
+  distinct(variant_id, caqtl_id, peak_name, chrombpnet_variants, type, coloc_status)
+
+###-------------
+
+make_corr_plot <- function(df, xvar, yvar, xlab, ylab, title_text) {
+  plot_df <- df %>%
+    filter(!is.na(.data[[xvar]]), !is.na(.data[[yvar]]))
+  
+  if (nrow(plot_df) < 3) {
+    warning(paste("Not enough complete observations for", title_text))
+    return(NULL)
+  }
+  
+  r_val <- cor(
+    plot_df[[xvar]],
+    plot_df[[yvar]],
+    method = "pearson"
+  )
+  
+  t_val <- cor.test(
+    plot_df[[xvar]],
+    plot_df[[yvar]],
+    method = "pearson"
+  )
+  
+  stats_text <- paste0(
+    "r = ", round(r_val, 3),
+    "\np = ", signif(t_val$p.value, 3),
+    "\nN = ", nrow(plot_df)
+  )
+  
+  x_rng <- range(plot_df[[xvar]], na.rm = TRUE)
+  y_rng <- range(plot_df[[yvar]], na.rm = TRUE)
+  
+  x_pos <- x_rng[2] - 0.05 * diff(x_rng)
+  y_pos <- y_rng[1] + 0.05 * diff(y_rng)
+  
+  ggplot(plot_df, aes(x = .data[[xvar]], y = .data[[yvar]])) +
+    ggrastr::geom_point_rast(
+      shape = 16,
+      size = 0.6,
+      alpha = 0.18,
+      color = "gray20"
+    ) +
+    geom_smooth(
+      method = "lm",
+      se = TRUE,
+      color = "blue",
+      fill = "lightblue",
+      linewidth = 0.8
+    ) +
+    geom_abline(
+      intercept = 0,
+      slope = 1,
+      linetype = "dashed",
+      color = "gray40",
+      linewidth = 0.4
+    ) +
+    annotate(
+      "label",
+      x = x_pos,
+      y = y_pos,
+      label = stats_text,
+      hjust = 1,
+      vjust = 0,
+      size = 3.5
+    ) +
+    labs(
+      x = xlab,
+      y = ylab,
+      title = title_text
+    ) +
+    theme_light() +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      axis.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank()
+    )
+}
+
+dual_sharedCA_df <- credible_sets_features %>%
+  filter(type == "shared_chrom_caqtl")
+
+dual_sharedE_df <- credible_sets_features %>%
+  filter(type == "shared_chrom_eqtl")
+
+triple_shared_df <- credible_sets_features %>%
+  filter(type == "shared_all")
+
+
+
+### since in the coloc resutls, the same caQTL can be associated to the multiple genes and vice-versa, when plotting each combination we must filtered out repeated measures.
+
+
+ca_vareff_plot_dualCA <- make_corr_plot( #no duplicates in dual shared
+  dual_sharedCA_df,
+  xvar = "caqtl_slope",
+  yvar = "logfc.mean",
+  xlab = "caQTL (\u03b2)",
+  ylab="ChromBPNet log(aFC)",
+  title_text = "Dual Shared: ChromBPNet + caQTL"
+)
+
+ca_vareff_plot_dualE <- make_corr_plot( #no duplicates in dual shared
+  dual_sharedE_df,
+  xvar = "eqtl_slope",
+  yvar = "logfc.mean",
+  xlab = "eQTL (\u03b2)",
+  ylab="ChromBPNet log(aFC)",
+  title_text = "Dual Shared: ChromBPNet + eQTL"
+)
+
+ca_vareff_plot_tripleE <- make_corr_plot(
+  (triple_shared_df %>% select(chrombpnet_variants, eqtl_id, eqtl_slope, logfc.mean) %>% distinct()),
+  xvar = "eqtl_slope",
+  yvar = "logfc.mean",
+  xlab = "eQTL (\u03b2)",
+  ylab="ChromBPNet log(aFC)",
+  title_text = "Triple Shared: ChromBPNet + eQTL + caQTL"
+)
+
+ca_vareff_plot_tripleCA <- make_corr_plot(
+  (triple_shared_df %>% select(chrombpnet_variants, caqtl_id, caqtl_slope, logfc.mean) %>% distinct()),
+  xvar = "caqtl_slope",
+  yvar = "logfc.mean",
+  xlab = "caQTL (\u03b2)",
+  ylab="ChromBPNet log(aFC)",
+  title_text = "Triple Shared: ChromBPNet + caQTL + eQTL"
+)
+
+ca_vareff_plot_tripleboth <- make_corr_plot(
+  (triple_shared_df %>% select(eqtl_id, caqtl_id, caqtl_slope, eqtl_slope) %>% distinct()),
+  xvar = "eqtl_slope",
+  yvar = "caqtl_slope",
+  xlab = "eQTL (\u03b2)",
+  ylab = "caQTL (\u03b2)",
+  title_text = "Triple Shared: ChromBPNet + caQTL + eQTL"
+)
+
+
+library(cowplot)
+pt<-plot_grid(ca_vareff_plot_tripleCA, ca_vareff_plot_dualCA, ca_vareff_plot_tripleE, ca_vareff_plot_dualE, ca_vareff_plot_tripleboth, ncol = 2)
+pt
+
+```
+

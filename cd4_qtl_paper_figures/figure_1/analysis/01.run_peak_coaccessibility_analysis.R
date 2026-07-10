@@ -1,4 +1,7 @@
-.libPaths(c("/gchm/R/x86_64-pc-linux-gnu-library/4.4", "/nfs/sw/easybuild/software/R/4.4.1-gfbf-2023b/lib/R/library"))
+
+source("cd4t-qtl-map/cd4_qtl_paper_figures/paths_config.R")
+
+.libPaths(fig1_paths$r_env)
 library(dplyr)
 library(ggplot2)
 library(GenomicRanges)
@@ -8,11 +11,10 @@ library(BiocParallel)
 register(MulticoreParam(workers = 4))  # Use all CPUs allocated
 
 ### Load and format input ######################################################
-finemapping_dir <- "/gcgls/marlis_pj/coloc/SuSiE_finemap_credible_sets/CD4T_chromatin/"
 
 # Grab every file that matches “…chr{N}_credible_sets.txt”
 cred_files <- list.files(
-  finemapping_dir,
+  fig1_paths$finemapping_dir,
   pattern = "^CD4T_chromatin_chr[0-9XYM]+_credible_sets\\.txt$",
   full.names = TRUE
 )
@@ -35,7 +37,7 @@ res <- do.call(
 res$variant_pos <- as.numeric(sub(".*:(\\d+)\\[.*", "\\1", res$variant_id))
 res$chr         <- paste0("chr", res$chr)   # add UCSC-style prefix
 
-peak_coords <- read.delim2("/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/003_inputs/filtered_qsmooth_norm_cpm/filtered_qsmooth_norm_cpm_cd4_atac_processed_peaks.bed")
+peak_coords <- read.delim2(fig1_paths$peak_coords_file)
 peak_coordsGR <- GRanges(peak_coords$X.chr, IRanges(peak_coords$start, peak_coords$end), peak_name = peak_coords$peak_name)
 names(peak_coordsGR) <- peak_coordsGR$peak_name
 
@@ -93,7 +95,7 @@ correlation_results$FDR <- p.adjust(correlation_results$pval, method = "fdr")
 ### Save output ###
 write.csv(
   correlation_results,
-  "/gchm/cd4_qtl_paper_figures/figure_1/data/caPeak_coacc_correlation_results_allchrs.csv",
+  fig1_paths$correlation_results_file,
   row.names = FALSE
 )
 

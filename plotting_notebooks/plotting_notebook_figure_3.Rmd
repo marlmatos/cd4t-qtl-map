@@ -1,0 +1,1417 @@
+---
+title: "plotting_nb_figure_3"
+author: "Marliette Matos"
+output: html_notebook
+---
+```{r}
+
+source("config.local.R")
+
+.libPaths(c(
+  r_lib_path_44,
+  "/nfs/sw/easybuild/software/R/4.4.1-gfbf-2023b/lib/R/library"
+))
+options(bitmapType = "cairo")
+
+suppressPackageStartupMessages({
+  library(data.table)
+  library(dplyr)
+  library(ggplot2)
+  library(ggrepel)
+  library(stringr)
+  library(rtracklayer)
+  library(purrr)
+  library(igraph)
+  library(readr)
+  library(cowplot)
+  library(tidyr)
+})
+
+```
+
+```{r , fig.width=10, fig.height=5}
+##plots
+findr_res<-fread(paths_figure3$all_res_not_filtered_tsv)
+totals<-fread(paths_figure3$inputs_tsv) 
+findr_res_sig<-findr_res %>% filter(fdr_sig_5==TRUE)
+
+res.base <- findr_res_sig %>%
+  mutate(
+    triads = paste(locus_id, phenotype_A, phenotype_B, sep = "_")
+  ) %>%
+  distinct(type, triads, locus_id, phenotype_A, phenotype_B, fdr_sig_5, fdr_sig_1)
+
+res_5 <- res.base %>%
+  filter(fdr_sig_5 == TRUE) %>%          # all 5% hits, including 1%
+  group_by(type) %>%
+  summarise(
+    n_triads    = n_distinct(triads),
+    n_loci      = n_distinct(locus_id),
+    n_mediators = n_distinct(phenotype_A),
+    n_targets   = n_distinct(phenotype_B),
+    .groups     = "drop"
+  ) %>%
+  mutate(significance = "5% FDR")
+res_1 <- res.base %>%
+  filter(fdr_sig_1 == TRUE) %>%         # only 1% hits
+  group_by(type) %>%
+  summarise(
+    n_triads    = n_distinct(triads),
+    n_loci      = n_distinct(locus_id),
+    n_mediators = n_distinct(phenotype_A),
+    n_targets   = n_distinct(phenotype_B),
+    .groups     = "drop"
+  ) %>%
+  mutate(significance = "1% FDR")
+plot_df <- bind_rows(res_5, res_1) %>%
+  left_join(totals, by = "type") %>%
+  mutate(
+    pct_sig_loc = n_loci / n_loci_tested,
+    type        = factor(type, levels = c("forward", "reverse")),
+    significance = factor(significance, levels = c("5% FDR", "1% FDR"))
+  )
+
+
+
+### plot
+
+# Split the data by type
+plot_df_split <- split(plot_df, plot_df$type) 
+
+# Define your palette (avoid calling it `colors` to not clash with base::colors)
+fdr_cols <- c(
+  "1% FDR" = "#f39c12",
+  "5% FDR" = "#efd4a8" 
+)
+
+# Forward plot
+df_fwd <- plot_df_split$forward
+
+pr_fwd <- ggplot(df_fwd, aes(x = "", y = pct_sig_loc)) +
+  # 5% FDR on top
+  geom_col(
+    data  = df_fwd %>% dplyr::filter(significance == "5% FDR"),
+    aes(fill = significance),
+    position = "identity",
+    width    = 0.7,
+    colour   = "grey40",
+    linewidth=0.1
+  ) +
+  # 1% FDR at the bottom
+  geom_col(
+    data  = df_fwd %>% dplyr::filter(significance == "1% FDR"),
+    aes(fill = significance),
+    position = "identity",
+    width    = 0.7,
+    colour   = "grey40",
+    linewidth=0.1
+    
+  ) +
+  geom_text(
+    data  = df_fwd %>% dplyr::filter(significance == "5% FDR"),
+    aes(label = n_loci),
+    vjust    = -0.3,
+    size     = 5,
+    fontface = "bold"
+  ) +
+  scale_fill_manual(values = fdr_cols) +
+  scale_y_continuous(expand = c(0.01, 0)) +
+  labs(
+    title = "Forward Mediation",
+    x     = NULL,
+    y     = "% loci with significant triads"
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    plot.title     = element_text(hjust = 0.5, face = "bold"),
+    axis.text.x    = element_blank(),
+    axis.ticks.x   = element_blank(),
+    legend.position = "top"
+  )
+
+
+df_rev <-plot_df_split$rev
+pr_rev <- ggplot(df_rev, aes(x = "", y = pct_sig_loc)) +
+  # 5% FDR on top
+  geom_col(
+    data  = df_rev %>% dplyr::filter(significance == "5% FDR"),
+    aes(fill = significance),
+    position = "identity",
+    width    = 0.7,
+    colour   = "grey40",
+    linewidth=0.1
+  ) +
+  # 1% FDR at the bottom
+  geom_col(
+    data  = df_rev %>% dplyr::filter(significance == "1% FDR"),
+    aes(fill = significance),
+    position = "identity",
+    width    = 0.7,
+    colour   = "grey40",
+    linewidth=0.1
+    
+  ) +
+  geom_text(
+    data  = df_rev %>% dplyr::filter(significance == "5% FDR"),
+    aes(label = n_loci),
+    vjust    = -0.3,
+    size     = 5,
+    fontface = "bold"
+  ) +
+  # <-- this is where your colors are applied
+  scale_fill_manual(values = fdr_cols) +
+  scale_y_continuous(expand = c(0.01, 0)) +
+  labs(
+    title = "Reverse Mediation",
+    x     = NULL,
+    y     = "% loci with significant triads"
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    plot.title     = element_text(hjust = 0.5, face = "bold"),
+    axis.text.x    = element_blank(),
+    axis.ticks.x   = element_blank(),
+    legend.position = "top"
+  )
+
+
+
+plot_df_fwd <- plot_df_split$forward %>%
+  pivot_longer(
+    cols = c(n_triads, n_loci, n_mediators, n_targets ),
+    names_to = "metric",
+    values_to = "value") %>%
+  mutate(metric=factor(metric, levels = c("n_triads","n_loci", "n_mediators", "n_targets"))
+         
+  )
+plot_df_rev <- plot_df_split$reverse %>%
+  pivot_longer(
+    cols = c(n_triads, n_loci, n_mediators, n_targets),
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(metric=factor(metric, levels = c("n_triads","n_loci", "n_mediators", "n_targets"))
+         
+  )
+
+
+pr1 <- plot_df_rev %>% filter(significance=="5% FDR") %>%
+  filter(metric %in% c( "n_targets", "n_mediators", "n_triads")) %>%
+  mutate(metric = factor(metric, levels=c( "n_targets", "n_mediators", "n_triads")))%>%
+  ggplot(aes(x = metric, y = value, fill = metric)) +
+  geom_col(width = 0.8, fill="#efd4a8", colour   ="black", linewidth=0.1) +
+  geom_text(
+    aes(label = scales::comma(value)),      # numeric labels formatted
+    vjust = -0.4, size = 5, fontface = "bold"
+  ) +
+  scale_fill_brewer(palette = "Set2", name = "Metric") +
+  labs(
+    title = "Mediation Analysis (Reverse)",
+    y     = NULL,
+    x     = NULL
+  )+
+  scale_y_continuous(expand = c(0.01, 0)) +
+  theme_classic() +
+  theme(
+    axis.title  = element_text(size = 18),
+    plot.title  = element_text(hjust = 0.5, face = "bold"),
+    axis.text   = element_text(size = 16),
+    axis.text.x =  element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.line.x = element_blank(),
+    legend.position = "top"
+  )  + coord_flip() 
+
+
+pr2<-plot_df_fwd %>% filter(significance=="5% FDR") %>%
+  filter(metric %in% c( "n_targets", "n_mediators", "n_triads")) %>%
+  mutate(metric = factor(metric, levels=c( "n_targets", "n_mediators", "n_triads")))%>%
+  ggplot( aes(metric,value, fill =metric)) +
+  geom_col(width = 0.8, fill="#efd4a8", colour   ="black", linewidth=0.1) +
+  geom_text(
+    aes(label = scales::comma(value)),      # numeric labels formatted
+    vjust = -0.4, size = 5, fontface = "bold"
+  ) +
+  scale_fill_brewer(palette = "Set2", name = "Metric") +
+  labs(
+    title = "Mediation Analysis (Forward)",
+    y     = NULL,
+    x     = NULL
+  ) +
+  scale_y_continuous(expand = c(0.01, 0)) +
+  theme_classic() +
+  theme(
+    axis.title  = element_text(size = 18),
+    plot.title  = element_text(hjust = 0.5, face = "bold"),
+    axis.text   = element_text(size = 16),
+    axis.text.x =  element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.line.x = element_blank(),
+    legend.position = "top"
+  ) + coord_flip() 
+
+
+
+plt.mediation<-plot_grid(pr_fwd, pr2, pr_rev,pr1,ncol=2, rel_widths = c(0.7, 1), align = "h")
+
+#ggsave(file.path(paths_figure3$dec2025_dir, "mediation_results_summary.pdf"), plt.mediation, height = 30, width = 20, units = "cm", dpi = 300)
+
+
+## 1) Summaries ---------------------------------------------------------
+
+inst_phenotype_A <- findr_res_sig %>%
+  dplyr::group_by(type, locus_id) %>%
+  dplyr::summarise(
+    n_phenotype_A = dplyr::n_distinct(phenotype_A),
+    .groups       = "drop"
+  )
+
+phenotype_A_to_B <- findr_res_sig %>%
+  dplyr::group_by(type, locus_id, phenotype_A) %>%
+  dplyr::summarise(
+    n_phenotype_B = dplyr::n_distinct(phenotype_B),
+    .groups       = "drop"
+  )
+
+## 2) Common axis settings ---------------------------------------------
+
+x_limits  <- c(0.9, 10)
+x_breaks  <- seq(0, 10, by = 5)
+
+
+## 3) Helper to make histograms consistent -----------------------------
+make_hist <- function(
+    df,
+    xvar,
+    title,
+    xlab,
+    ylab,
+    x_limits  = NULL,
+    x_breaks  = NULL,
+    fill      = "#716f9e",
+    binwidth  = 1,
+    line_col  = "#3f3f3f",
+    y_limits  = c(0, 110),
+    y_breaks  = seq(0, 110, by = 25),
+    range_var = NULL   # name of column to show range for (character or NULL)
+) {
+  # Base plot
+  p <- ggplot(df, aes(x = .data[[xvar]])) +
+    geom_histogram(
+      binwidth  = binwidth,
+      fill      = fill,
+      colour    = line_col,
+      linewidth = 0.2,
+      boundary  = 0
+    ) +
+    scale_x_continuous(
+      limits = x_limits,
+      breaks = x_breaks,
+      expand = c(0, 0)
+    ) +
+    scale_y_continuous(
+      limits = y_limits,
+      breaks = y_breaks,
+      expand = c(0, 0)
+    ) +
+    labs(
+      title = title,
+      x     = xlab,
+      y     = ylab
+    ) +
+    theme_classic() +
+    theme(
+      axis.title = element_text(size = 18),
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      axis.text  = element_text(size = 16)
+    )
+  
+  # Optional range annotation
+  if (!is.null(range_var)) {
+    rng <- range(df[[range_var]], na.rm = TRUE)
+    label_txt <- paste0("Range: [", round(rng[1], 2), " – ", round(rng[2], 2), "]")
+    
+    # Use current limits (after scale_y) to place text in top-right
+    y_max <- y_limits[2]
+    x_max <- if (!is.null(x_limits)) x_limits[2] else max(df[[xvar]], na.rm = TRUE)
+    
+    p <- p +
+      annotate(
+        "text",
+        x = x_max,
+        y = y_max,
+        label = label_txt,
+        hjust = 1.05,
+        vjust = 1.2,
+        size  = 4
+      )
+  }
+  
+  p
+}
+
+
+## 4) Split data by type -----------------------------------------------
+
+inst_split  <- split(inst_phenotype_A, inst_phenotype_A$type)
+pheno_split <- split(phenotype_A_to_B, phenotype_A_to_B$type)
+
+## 5) Build separate graphs (no facets) --------------------------------
+
+# Peaks per Variant (y = # Variants)
+p1_forward <- make_hist(
+  df       = inst_split$forward,
+  xvar     = "n_phenotype_A",
+  title    = "Chromatin → Gene",
+  xlab     = "No. Unique Peaks",
+  ylab     = "No. Unique Variants",
+  x_limits = x_limits,
+  x_breaks = x_breaks,
+  range_var="n_phenotype_A"
+)
+
+p1_reverse <- make_hist(
+  df       = inst_split$reverse,
+  xvar     = "n_phenotype_A",
+  title    = "Gene → Chromatin",
+  xlab     = "No. Unique Genes",
+  ylab     = "No. Unique Variants",
+  x_limits = x_limits,
+  x_breaks = x_breaks,
+  range_var="n_phenotype_A"
+  
+)
+
+# Genes per Peak (y = # Peaks)
+p2_forward <- make_hist(
+  df       = pheno_split$forward,
+  xvar     = "n_phenotype_B",
+  title    = "Gene → Chromatin",
+  xlab     = "No. Unique Genes",
+  ylab     = "No. Unique Peaks",
+  x_limits = x_limits,
+  x_breaks = x_breaks,
+  range_var="n_phenotype_B"
+  
+)
+
+p2_reverse <- make_hist(
+  df       = pheno_split$reverse,
+  xvar     = "n_phenotype_B",
+  title    = "Chromatin → Gene",
+  xlab     = "No. Unique Peaks",
+  ylab     = "No. Unique Genes",
+  x_limits = x_limits,
+  x_breaks = x_breaks,
+  range_var="n_phenotype_B"
+  
+)
+
+## 6) Grid layout (2 × 2) ----------------------------------------------
+
+combined_plot <- cowplot::plot_grid(
+  p1_forward, p2_forward,
+  p1_reverse, p2_reverse,
+  ncol  = 2,
+  align = "hv"
+)
+
+
+
+
+## 4. Grid layout (side‑by‑side) --------------------------------
+combined_plot <- plot_grid(
+  p1_forward, p2_forward, p1_reverse, p2_reverse,
+  ncol        = 2,   # one column → vertical stack
+  align       = "v", # align plots vertically
+  axis        = "lr",  # keep left/right axes lined up
+  rel_heights = c(1,1,1,1)
+)
+
+
+
+combined_plot<-plot_grid(pr_fwd, pr2, p1_forward, p2_forward,
+                         pr_rev,pr1, p1_reverse, p2_reverse,
+                         nrow=2, rel_widths = c(.6, 1, 0.8, 0.8), align = "h")
+
+
+
+library(VennDiagram)
+library(grid)
+# Per-instrument/type counts (you already have this as `n`)
+counts <- findr_res_sig %>% mutate(triad=ifelse(type == "forward", paste0(locus_id, "_", phenotype_A, "_", phenotype_B), paste0(locus_id, "_", phenotype_B, "_", phenotype_A))) %>%
+  dplyr::count(triad, type, name = "n")
+
+forward_ids <- counts %>% filter(type == "forward") %>% pull(triad) %>% unique()
+
+reverse_ids <- counts %>% filter(type == "reverse") %>% pull(triad) %>% unique()
+
+grid.newpage()
+venn.plot <- draw.pairwise.venn(
+  area1      = length(forward_ids),
+  area2      = length(reverse_ids),
+  cross.area = length(intersect(forward_ids, reverse_ids)),
+  category   = c("Forward", "Reverse"),
+  fill       = c("#56B4E9", "#E69F00"),
+  alpha      = 0.5,
+  cex        = 1.3,
+  cat.cex    = 1.2
+)
+
+venn<-grid.draw(venn.plot)
+
+plt.mediation
+
+```
+```{r}
+# ============================================================
+# Annotate peaks + genes, derive relative position features,
+# and run enrichment tests (rel_pos, caqtl_category, ChromBPNet)
+# Minimal changes; mostly re-ordered + de-duplicated libraries.
+# ============================================================
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(stringr)
+  library(readr)
+  library(data.table)
+  library(purrr)
+  library(tidyr)
+  library(tibble)
+  library(ggplot2)
+  library(scales)
+  library(sandwich)  # vcovCL
+  library(lmtest)    # coeftest
+  library(rtracklayer)
+  library(GenomicFeatures)
+  library(txdbmaker)
+})
+
+options(bitmapType = "cairo")
+
+# ------------------------------------------------------------
+# 0) Inputs assumed to exist
+# ------------------------------------------------------------
+# - findr_res_sig : Findr results (must contain: type, phenotype_A, phenotype_B, locus_id, caqtl_category, ...)
+setwd(paths_figure3$work_dir)
+
+findr_res<-fread(paths_figure3$all_res_not_filtered_tsv)
+findr_res_sig<-findr_res %>% filter(fdr_sig_5==TRUE)
+
+## add information about the type of caQTL category
+findr_res_sig <- findr_res_sig %>%
+  mutate(
+    caqtl_finemapped_cs = vapply(
+      strsplit(finemapped_cs_coloc, "_"),
+      function(x) paste(x[1:7], collapse = "_"),
+      character(1)
+    )
+  )
+
+caqttls<-read_csv(paths_figure3$combined_finemapping_annotated) %>% dplyr::select(finemapped_cs, cs_type_any_var)
+caqttls<-caqttls[caqttls$finemapped_cs %in% findr_res_sig$caqtl_finemapped_cs, ] %>% distinct() %>%
+  mutate(caqtl_category=ifelse(cs_type_any_var=="in_corr_Peak", "in_other_Peak", cs_type_any_var))
+
+findr_res_sig<-findr_res_sig %>% left_join(caqttls, join_by("caqtl_finemapped_cs"=="finemapped_cs"))
+
+
+# ============================================================
+# 1) Add peak coordinates to findr_res_sig
+# ============================================================
+
+peak_coords <- read_tsv(
+  paths_figure3$peak_coords_bed,
+  col_names = NULL,
+  show_col_types = FALSE
+)
+
+peaks_names <- read.delim2(
+  paths_figure3$processed_peaks_bed
+)$peak_name
+
+peak_coords <- peak_coords[peak_coords$X4 %in% peaks_names, ]
+colnames(peak_coords) <- c(
+  "peak_chr", "peak_start", "peak_end", "peak_name",
+  "X5", "X6", "X7", "X8", "X9", "X10", "X11"
+)
+
+peaks_forward <- findr_res_sig$phenotype_A[findr_res_sig$type == "forward"]
+peaks_rev     <- findr_res_sig$phenotype_B[findr_res_sig$type == "reverse"]
+all_peaks     <- union(peaks_forward, peaks_rev)
+
+peak_coords <- peak_coords[peak_coords$peak_name %in% all_peaks, ]
+
+# unified peak identifier in findr_res_sig
+findr_res_sig <- findr_res_sig %>%
+  mutate(
+    peak_id = if_else(
+      type == "forward",
+      phenotype_A,   # chromatin peak in forward model
+      phenotype_B    # chromatin peak in reverse model
+    )
+  )
+
+# join peak coordinates back into findr_res_sig
+peak_coords_min <- peak_coords %>%
+  dplyr::select(peak_name, peak_chr, peak_start, peak_end)
+
+findr_res_sig <- findr_res_sig %>%
+  left_join(peak_coords_min, by = c("peak_id" = "peak_name"))
+
+# ============================================================
+# 2) Add gene coordinates to findr_res_sig (Gencode v44 GTF)
+# ============================================================
+
+gtf_path <- paths_figure3$gtf_path
+
+gtf  <- import(gtf_path)
+txdb <- txdbmaker::makeTxDbFromGFF(gtf_path)
+
+gene_annot <- gtf[gtf$type == "gene"]
+
+gene_map <- as_tibble(mcols(gene_annot)) %>%
+  transmute(
+    gene_id_full = gene_id,
+    gene_id      = sub("\\..*$", "", gene_id),
+    gene_name    = gene_name
+  ) %>%
+  distinct()
+
+gene_gr <- genes(txdb)
+
+gene_coords <- as_tibble(gene_gr) %>%
+  transmute(
+    gene_id     = sub("\\..*$", "", gene_id),
+    gene_chr    = as.character(seqnames),
+    gene_start  = start,
+    gene_end    = end,
+    gene_strand = as.character(strand),
+    gene_tss    = if_else(gene_strand == "+", gene_start, gene_end)
+  )
+
+gene_table <- gene_map %>%
+  inner_join(gene_coords, by = "gene_id")
+
+# unified gene identifier in findr_res_sig
+findr_res_sig <- findr_res_sig %>%
+  mutate(
+    gene_symbol = if_else(
+      type == "forward",
+      phenotype_B,
+      phenotype_A
+    )
+  )
+
+gene_table <- gene_table[gene_table$gene_name %in% findr_res_sig$gene_symbol, ]
+
+# collapse multiple transcripts per gene_name+chr
+genes_collapsed <- gene_table %>%
+  group_by(gene_name, gene_chr) %>%
+  summarise(
+    gene_start = min(gene_start, na.rm = TRUE),
+    gene_end   = max(gene_end,   na.rm = TRUE),
+    .idx       = which.min(replace(gene_start, is.na(gene_start), Inf)),
+    gene_strand = gene_strand[.idx],
+    gene_tss    = gene_tss[.idx],
+    .groups = "drop"
+  ) %>%
+  dplyr::select(-.idx)
+
+findr_res_sig <- findr_res_sig %>%
+  left_join(
+    genes_collapsed,
+    by = c(
+      "gene_symbol" = "gene_name",
+      "peak_chr"    = "gene_chr"
+    )
+  )
+
+# ============================================================
+# 3) Relative peak position features + locus model + triad ID
+# ============================================================
+
+findr_res_sig <- findr_res_sig %>%
+  mutate(
+    peak_mid = (peak_start + peak_end) / 2,
+    signed_dist_TSS = case_when(
+      is.na(gene_tss)    ~ NA_real_,
+      gene_strand == "+" ~ as.numeric(peak_mid - gene_tss),
+      gene_strand == "-" ~ as.numeric(gene_tss - peak_mid),
+      TRUE               ~ NA_real_
+    ),
+    abs_dist_TSS = abs(signed_dist_TSS),
+    
+    peak_in_gene_body =
+      !is.na(gene_start) & !is.na(gene_end) &
+      peak_mid >= gene_start &
+      peak_mid <= gene_end,
+    
+    peak_in_promoter =
+      !is.na(gene_tss) &
+      peak_mid >= (gene_tss - 2000L) &
+      peak_mid <= (gene_tss + 2000L),
+    
+    rel_pos = case_when(
+      peak_in_promoter    ~ "promoter",
+      peak_in_gene_body   ~ "intragenic",
+      signed_dist_TSS < 0 ~ "upstream",
+      signed_dist_TSS > 0 ~ "downstream",
+      TRUE                ~ "unknown"
+    )
+  )
+
+# triad string (consistent forward/reverse orientation)
+findr_res_sig <- findr_res_sig %>%
+  mutate(
+    triad = ifelse(
+      type == "forward",
+      paste0(locus_id, "_", phenotype_A, "_", phenotype_B),
+      paste0(locus_id, "_", phenotype_B, "_", phenotype_A)
+    )
+  )
+
+# locus_model (based on counts of forward vs reverse)
+locus_models <- findr_res_sig %>%
+  count(locus_id, type) %>%
+  pivot_wider(names_from = type, values_from = n, values_fill = 0) %>%
+  mutate(
+    locus_model = case_when(
+      forward > reverse ~ "var->chr->gene",
+      reverse > forward ~ "var->gene->chr",
+      TRUE              ~ "ambiguous"
+    )
+  )
+
+findr_res_sig <- findr_res_sig %>%
+  left_join(locus_models, by = "locus_id")
+
+# ============================================================
+# 4) Simple promoter Fisher test (forward vs reverse)
+# ============================================================
+
+tab_prom <- findr_res_sig %>%
+  distinct(triad, type, peak_in_promoter) %>%
+  count(type, peak_in_promoter) %>%
+  pivot_wider(names_from = peak_in_promoter, values_from = n, values_fill = 0)
+
+prom_mat <- as.matrix(tab_prom[, -1])
+rownames(prom_mat) <- tab_prom$type
+prom_mat <- prom_mat[, c("TRUE", "FALSE")]
+
+print(fisher.test(prom_mat))
+
+# ============================================================
+# 5) Relative position enrichment (GLM with cluster SE by locus)
+# ============================================================
+
+rel_levels <- c("downstream", "intragenic", "promoter", "upstream")
+
+relpos_enrich <- map_dfr(rel_levels, function(pos) {
+  
+  df_pos <- findr_res_sig %>%
+    filter(rel_pos != "unknown") %>%
+    mutate(is_pos = rel_pos == pos) %>%
+    distinct(triad, locus_id, locus_model, is_pos) %>%
+    filter(locus_model %in% c("var->chr->gene", "var->gene->chr")) %>%
+    mutate(
+      locus_model = factor(locus_model),
+      locus_model = relevel(locus_model, ref = "var->gene->chr"),
+      is_pos_num  = as.numeric(is_pos)
+    )
+  
+  if (n_distinct(df_pos$locus_model) < 2) {
+    return(tibble(
+      rel_pos    = pos,
+      odds_ratio = NA_real_,
+      conf_low   = NA_real_,
+      conf_high  = NA_real_,
+      p_value    = NA_real_
+    ))
+  }
+  
+  fit <- glm(is_pos_num ~ locus_model, data = df_pos, family = binomial())
+  
+  vcov_locus <- vcovCL(fit, cluster = ~ locus_id)
+  ct <- coeftest(fit, vcov = vcov_locus)
+  
+  beta <- ct["locus_modelvar->chr->gene", "Estimate"]
+  se   <- ct["locus_modelvar->chr->gene", "Std. Error"]
+  p    <- ct["locus_modelvar->chr->gene", "Pr(>|z|)"]
+  
+  OR <- exp(beta)
+  CI <- exp(beta + c(-1, 1) * 1.96 * se)
+  
+  tibble(
+    rel_pos    = pos,
+    odds_ratio = OR,
+    conf_low   = CI[1],
+    conf_high  = CI[2],
+    p_value    = p
+  )
+}) %>%
+  mutate(p_adj = p.adjust(p_value, method = "BH")) %>%
+  mutate(
+    sig = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01  ~ "**",
+      p_adj < 0.05  ~ "*",
+      TRUE          ~ ""
+    ),
+    or_ci_lab = ifelse(
+      is.na(odds_ratio),
+      NA_character_,
+      sprintf("OR=%.2f (%.2f–%.2f)%s", odds_ratio, conf_low, conf_high, sig)
+    )
+  )
+
+gg_relpos <- ggplot(relpos_enrich, aes(x = rel_pos, y = odds_ratio)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_pointrange(aes(ymin = conf_low, ymax = conf_high),
+                  position = position_dodge(width = 0.4),
+                  size = 1.2) +
+  geom_text(aes(y = conf_high * 1.15, label = or_ci_lab),
+            hjust = 0, size = 3.4, na.rm = TRUE) +
+  scale_y_log10() +
+  labs(
+    x = "Chromatin peak position",
+    y = "Odds ratio (var→chr→gene vs var→gene→chr, log scale)",
+    title = "Enrichment of positional classes in var→chr→gene loci"
+  ) +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.margin = margin(5.5, 60, 5.5, 5.5)) +
+  coord_flip(clip = "off")
+
+print(gg_relpos)
+
+write_csv(relpos_enrich, paths_figure3$relpos_enrich_csv)
+
+ggsave(
+  paths_figure3$relpos_pdf,
+  gg_relpos, width = 14, height = 12, units = "cm", dpi = 300
+)
+
+# ============================================================
+# 6) Category enrichment function (GLM with cluster SE by locus)
+# ============================================================
+
+run_enrich_by_category <- function(df,
+                                   category_col,
+                                   levels = NULL,
+                                   unknown_values = c("unknown", NA),
+                                   model_keep = c("var->chr->gene", "var->gene->chr")) {
+  
+  if (is.null(levels)) {
+    levels <- df %>%
+      pull(.data[[category_col]]) %>%
+      unique() %>%
+      sort() %>%
+      as.character()
+  }
+  
+  df0 <- df %>%
+    filter(!is.na(.data[[category_col]])) %>%
+    filter(!(.data[[category_col]] %in% setdiff(unknown_values, NA))) %>%
+    filter(locus_model %in% model_keep)
+  
+  map_dfr(levels, function(cat) {
+    
+    df_cat <- df0 %>%
+      mutate(is_cat = .data[[category_col]] == cat) %>%
+      distinct(triad, locus_id, locus_model, is_cat) %>%
+      mutate(
+        locus_model = factor(locus_model),
+        locus_model = relevel(locus_model, ref = "var->gene->chr"),
+        is_cat_num  = as.numeric(is_cat)
+      )
+    
+    if (n_distinct(df_cat$locus_model) < 2) {
+      return(tibble(
+        category   = cat,
+        odds_ratio = NA_real_,
+        conf_low   = NA_real_,
+        conf_high  = NA_real_,
+        p_value    = NA_real_
+      ))
+    }
+    
+    fit <- glm(is_cat_num ~ locus_model, data = df_cat, family = binomial())
+    
+    vc <- vcovCL(fit, cluster = ~ locus_id)
+    ct <- coeftest(fit, vcov. = vc)
+    
+    term <- "locus_modelvar->chr->gene"
+    beta <- ct[term, "Estimate"]
+    se   <- ct[term, "Std. Error"]
+    p    <- ct[term, "Pr(>|z|)"]
+    
+    OR <- exp(beta)
+    CI <- exp(beta + c(-1, 1) * 1.96 * se)
+    
+    tibble(
+      category   = cat,
+      odds_ratio = OR,
+      conf_low   = CI[1],
+      conf_high  = CI[2],
+      p_value    = p
+    )
+  })
+}
+
+caqtl_enrich <- run_enrich_by_category(
+  df = findr_res_sig,
+  category_col = "caqtl_category"
+) %>%
+  mutate(p_adj = p.adjust(p_value, method = "BH")) %>%
+  mutate(
+    sig = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01  ~ "**",
+      p_adj < 0.05  ~ "*",
+      TRUE          ~ ""
+    ),
+    or_ci_lab = ifelse(
+      is.na(odds_ratio),
+      NA_character_,
+      sprintf("OR=%.2f (%.2f–%.2f)%s", odds_ratio, conf_low, conf_high, sig)
+    )
+  )
+
+gg_caqtl <- ggplot(caqtl_enrich, aes(x = category, y = odds_ratio)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_pointrange(aes(ymin = conf_low, ymax = conf_high), size = 1.2) +
+  geom_text(aes(y = conf_high * 1.15, label = or_ci_lab),
+            hjust = 0, size = 3.4, na.rm = TRUE) +
+  scale_y_log10() +
+  coord_flip(clip = "off") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.margin = margin(5.5, 60, 5.5, 5.5)) +
+  labs(
+    x = "caQTL category",
+    y = "Odds ratio (var→chr→gene vs var→gene->chr, log scale)",
+    title = "Enrichment of caQTL categories in var→chr→gene loci"
+  )
+
+print(gg_caqtl)
+write_csv(caqtl_enrich, paths_figure3$caqtl_enrich_csv)
+
+ggsave(
+  paths_figure3$caqtl_pdf,
+  gg_caqtl, width = 14, height = 12, units = "cm", dpi = 300
+)
+
+# ============================================================
+# 7) Locus-based ChromBPNet enrichment (GLM)
+# ============================================================
+
+# Load ChromBPNet peak sets
+upset_memberships <- readRDS(paths_figure3$upset_credible_sets_rds) %>%
+  filter(
+    coloc_status   == "coloc",
+    chromBPNet     == "TRUE",
+    caqtl_category != "no_Peak_overlap"
+  ) %>%
+  mutate(
+    peak_name = str_extract(variant_id, "^cd4_atac_summits_peak_[0-9]+[a-z]*")
+  )
+
+cpbnet_peaks <- upset_memberships %>% pull(peak_name) %>% unique()
+cpbnet_peaks_TF <- upset_memberships %>%
+  filter(chromBPNet_motif == TRUE) %>%
+  pull(peak_name) %>%
+  unique()
+
+# locus-level dataset: one row per (locus_id, type)
+locus_df <- findr_res_sig %>%
+  filter(!is.na(peak_id), nzchar(peak_id)) %>%
+  mutate(
+    type = factor(type, levels = c("reverse", "forward")),
+    has_cpnet    = peak_id %in% cpbnet_peaks,
+    has_cpnet_tf = peak_id %in% cpbnet_peaks_TF
+  ) %>%
+  group_by(locus_id, type) %>%
+  summarise(
+    any_cpnet    = any(has_cpnet),
+    any_cpnet_tf = any(has_cpnet_tf),
+    n_triads     = n(),
+    n_peaks      = n_distinct(peak_id),
+    .groups = "drop"
+  )
+
+fit_any <- glm(any_cpnet ~ type, data = locus_df, family = binomial())
+fit_tf  <- glm(any_cpnet_tf ~ type, data = locus_df, family = binomial())
+
+tidy_or <- function(fit, label) {
+  broom::tidy(fit, conf.int = TRUE, exponentiate = TRUE) %>%
+    filter(term == "typeforward") %>%
+    transmute(
+      feature    = label,
+      odds_ratio = estimate,
+      conf_low   = conf.low,
+      conf_high  = conf.high,
+      p_value    = p.value
+    )
+}
+
+glm_locus_enrich <- bind_rows(
+  tidy_or(fit_any, "ChromBPNet var (any)"),
+  tidy_or(fit_tf,  "ChromBPNet var + TF motif")
+) %>%
+  mutate(
+    p_adj = p.adjust(p_value, method = "BH"),
+    sig = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01  ~ "**",
+      p_adj < 0.05  ~ "*",
+      TRUE          ~ ""
+    ),
+    or_ci_lab = sprintf("OR=%.2f (%.2f–%.2f)%s", odds_ratio, conf_low, conf_high, sig)
+  )
+
+print(glm_locus_enrich)
+
+gg_cbp_locus <- ggplot(glm_locus_enrich, aes(x = feature, y = odds_ratio)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  geom_pointrange(aes(ymin = conf_low, ymax = conf_high), size = 1.2) +
+  geom_text(aes(y = conf_high * 1.15, label = or_ci_lab),
+            hjust = 0, size = 3.2, na.rm = TRUE) +
+  scale_y_log10() +
+  labs(
+    x = NULL,
+    y = "Odds ratio (forward vs reverse, log scale)",
+    title = "Locus-based enrichment of ChromBPNet peaks in forward vs reverse loci"
+  ) +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.margin = margin(5.5, 70, 5.5, 5.5)) +
+  coord_flip(clip = "off")
+
+print(gg_cbp_locus)
+
+ggsave(
+  paths_figure3$chrombpnet_locus_pdf,
+  gg_cbp_locus,
+  width = 14, height = 12, units = "cm", dpi = 300
+)
+
+```
+
+
+```{r , locus-plot,  fig.width=10, fig.height=5}
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(readr)
+  library(stringr)
+  library(data.table)
+  library(GenomicRanges)
+  library(GenomeInfoDb)
+  library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+  library(AnnotationDbi)
+  library(org.Hs.eg.db)
+  library(BPCells)
+  library(genio)
+})
+source(paths_figure3$qtl_violin_helper)
+
+# ------------------------------------------------------------
+# 0) PATHS (edit here once)
+# ------------------------------------------------------------
+make_causality_plot_paths <- function() {
+  paths_figure3
+}
+
+# ------------------------------------------------------------
+# 1) LOAD RESOURCES ONCE: causality_bed, bed_df, metadata
+# ------------------------------------------------------------
+load_causality_plot_resources <- function(paths) {
+  all_res <- read_tsv(paths$all_res_tsv, show_col_types = FALSE)
+  
+  # peak coordinates (subset to filtered peak names)
+  peak_names <- read_tsv(paths$filtered_peaks, col_names = FALSE, show_col_types = FALSE)
+  bed_df <- read_tsv(paths$peaks_bed, col_select = 1:4, col_names = FALSE, show_col_types = FALSE) %>%
+    filter(X4 %in% peak_names$X1)
+  colnames(bed_df) <- c("peak_chr", "peak_start", "peak_end", "peak_name")
+  
+  # build causality_bed safely (chr/pos parsed from exposure_variable)
+  causality_bed <- all_res %>%
+    mutate(
+      chr_raw = str_match(exposure_variable, "^([0-9XYMT]+):")[,2],
+      pos     = as.integer(str_match(exposure_variable, "^[0-9XYMT]+:([0-9]+)\\[")[,2]),
+      chr     = paste0("chr", chr_raw),
+      gene_chr = peak_chr
+    ) %>%
+    dplyr::select(
+      chr, pos, exposure_variable, phenotype_A, phenotype_B,
+      peak_chr, peak_start, peak_end, gene_chr, gene_tss, gene_strand, type
+    ) %>%
+    mutate(
+      chr      = sub("^chrchr", "chr", chr),
+      peak_chr = sub("^chrchr", "chr", peak_chr),
+      gene_chr = sub("^chrchr", "chr", gene_chr),
+      type     = tolower(type)
+    )
+  
+  metadata <- read.csv(paths$metadata_csv, sep = ",", row.names = 1)
+  
+  list(
+    all_res = all_res,
+    bed_df = bed_df,
+    causality_bed = causality_bed,
+    metadata = metadata
+  )
+}
+
+# ------------------------------------------------------------
+# 2) SMALL HELPERS
+# ------------------------------------------------------------
+parse_instrument_chrpos <- function(instrument) {
+  m <- regexec("^([0-9XYMT]+):([0-9]+)\\[b[0-9]+\\]", instrument)
+  x <- regmatches(instrument, m)[[1]]
+  if (length(x) < 3) stop("Could not parse instrument: ", instrument)
+  list(chr_raw = x[2], chr = paste0("chr", x[2]), pos = as.integer(x[3]))
+}
+
+strip_region_prefix <- function(region_x, chr_raw) {
+  # handles: "21:START-END"  OR already "START-END"
+  out <- sub(paste0("^", chr_raw, ":"), "", region_x)
+  out
+}
+
+# for each causality_bed row, infer gene/peak depending on direction
+infer_gene_peak_from_row <- function(type, phenotype_A, phenotype_B) {
+  type <- tolower(type)
+  if (!type %in% c("forward","reverse")) return(list(gene = NA_character_, peak = NA_character_))
+  if (type == "forward") {
+    list(gene = phenotype_B, peak = phenotype_A)
+  } else {
+    list(gene = phenotype_A, peak = phenotype_B)
+  }
+}
+
+compute_zoom_from_row <- function(pos, gene_tss, peak_start, peak_end,
+                                  pad_frac = 0.25, pad_min = 1000L, pad_max = NULL) {
+  vals <- c(pos, gene_tss, peak_start, peak_end)
+  vals <- vals[is.finite(vals)]
+  if (!length(vals)) stop("No finite coordinates to compute zoom window.")
+  
+  left <- min(vals); right <- max(vals)
+  span <- max(1L, right - left)
+  
+  pad <- max(as.integer(span * pad_frac), as.integer(pad_min))
+  if (!is.null(pad_max)) pad <- min(pad, as.integer(pad_max))
+  
+  list(
+    start = max(1L, as.integer(left - pad)),
+    end   = as.integer(right + pad),
+    span  = span,
+    pad   = pad
+  )
+}
+
+build_gene_track_gencode <- function(region_zoom,
+                                     transcripts = NULL,
+                                    gencode_dir = paths_figure3$references_dir,
+                                     release = "44") {
+  # region_zoom can be "chrX:START-END" or a GRanges
+  region_gr <- if (inherits(region_zoom, "GRanges")) region_zoom else str_to_gr(region_zoom)
+  
+  # load/cached transcripts if not provided
+  if (is.null(transcripts)) {
+    transcripts <- read_gencode_genes(gencode_dir, release = release)
+  }
+  
+  trackplot_gene_custom(transcripts, region_gr) + ggplot2::guides(color = "none")
+}
+
+# ------------------------------------------------------------
+# 3) MAIN: give it ONE coloc row (triplicate) -> makes the whole plot
+# ------------------------------------------------------------
+plot_from_coloc_triplet <- function(coloc_triplet_row,
+                                    resources,
+                                    paths,
+                                    direction = c("forward", "reverse", "auto"),
+                                    zoom_pad_frac = 0.25,
+                                    zoom_pad_min  = 1000L,
+                                    zoom_pad_max  = NULL,
+                                    region_window_broad = 300000L,
+                                    out_pdf = NULL,
+                                    width = 7,
+                                    height = 5) {
+  
+  direction <- match.arg(direction)
+  
+  row <- as.list(coloc_triplet_row)
+  req_cols <- c("gene", "peak", "caQTL_variant", "eQTL_variant", "region.x")
+  missing <- setdiff(req_cols, names(row))
+  if (length(missing)) stop("coloc_triplet_row missing columns: ", paste(missing, collapse = ", "))
+  
+  gene_name <- as.character(row$gene)
+  peak_name <- as.character(row$peak)
+  ca_var    <- as.character(row$caQTL_variant)
+  eq_var    <- as.character(row$eQTL_variant)
+  region_x  <- as.character(row$region.x)
+  
+  # -------- choose instrument, but FALL BACK if not present in causality_bed --------
+  in_bed <- function(v) any(resources$causality_bed$exposure_variable == v)
+  
+  if (direction == "forward") {
+    instrument <- ca_var
+    if (!in_bed(instrument) && in_bed(eq_var)) instrument <- eq_var
+    if (!in_bed(instrument)) stop("Neither caQTL_variant nor eQTL_variant found in causality_bed for this triplet.")
+  } else if (direction == "reverse") {
+    instrument <- eq_var
+    if (!in_bed(instrument) && in_bed(ca_var)) instrument <- ca_var
+    if (!in_bed(instrument)) stop("Neither eQTL_variant nor caQTL_variant found in causality_bed for this triplet.")
+  } else {
+    # auto
+    instrument <- if (in_bed(ca_var)) ca_var else eq_var
+    if (!in_bed(instrument)) stop("Neither caQTL_variant nor eQTL_variant found in causality_bed for this triplet.")
+  }
+  
+  ip <- parse_instrument_chrpos(instrument)
+  chr_raw <- ip$chr_raw
+  chr     <- ip$chr
+  pos     <- ip$pos
+  
+  # -------- match causality_bed rows for instrument then compute gene/peak per row (vectorized) --------
+  df_inst0 <- resources$causality_bed %>%
+    dplyr::filter(.data$exposure_variable == instrument)
+  
+  if (nrow(df_inst0) == 0) {
+    stop("No rows in causality_bed for instrument = ", instrument,
+         ". (Try direction='auto' or verify this variant exists in your mediation results.)")
+  }
+  
+  df_inst <- df_inst0 %>%
+    dplyr::mutate(
+      type = tolower(.data$type),
+      gene_tmp = dplyr::case_when(
+        .data$type == "forward" ~ .data$phenotype_B,
+        .data$type == "reverse" ~ .data$phenotype_A,
+        TRUE ~ NA_character_
+      ),
+      peak_tmp = dplyr::case_when(
+        .data$type == "forward" ~ .data$phenotype_A,
+        .data$type == "reverse" ~ .data$phenotype_B,
+        TRUE ~ NA_character_
+      )
+    ) %>%
+    dplyr::filter(.data$gene_tmp == gene_name, .data$peak_tmp == peak_name)
+  
+  if (nrow(df_inst) == 0) {
+    stop("Instrument found in causality_bed, but no row matches gene+peak for this coloc triplet.\n",
+         "instrument=", instrument, "\n",
+         "gene=", gene_name, "\n",
+         "peak=", peak_name)
+  }
+  
+  # If user forced direction forward/reverse, enforce matching type as well
+  if (direction %in% c("forward","reverse")) {
+    df_inst <- df_inst %>% dplyr::filter(.data$type == direction)
+    if (nrow(df_inst) == 0) stop("Matched gene+peak, but no row matches requested direction=", direction)
+  }
+  
+  caus_row <- df_inst[1, , drop = FALSE]
+  type <- caus_row$type[[1]]
+  
+  # -------- zoom from causality_bed geometry --------
+  zoom <- compute_zoom_from_row(
+    pos        = pos,
+    gene_tss   = as.integer(caus_row$gene_tss[[1]]),
+    peak_start = as.integer(caus_row$peak_start[[1]]),
+    peak_end   = as.integer(caus_row$peak_end[[1]]),
+    pad_frac   = zoom_pad_frac,
+    pad_min    = zoom_pad_min,
+    pad_max    = zoom_pad_max
+  )
+  start_pos <- zoom$start
+  end_pos   <- zoom$end
+  
+  minStart <- max(1L, pos - as.integer(region_window_broad))
+  maxEnd   <- pos + as.integer(region_window_broad)
+  
+  region_zoom   <- paste0(chr, ":", start_pos, "-", end_pos)
+  region_nochr  <- strip_region_prefix(region_x, chr_raw)
+  title_txt     <- paste0(instrument, " (", type, "): ", str_to_pretty(region_zoom))
+  
+  # -------- caQTL scatter --------
+  prep_ca    <- prepare_caqtl_data(chr, peak_name, region_nochr, ca_var)
+  markers_ca <- prep_ca$markers
+  LD_ca      <- prep_ca$LD
+  
+  markers_ca <- markers_ca %>%
+    dplyr::mutate(
+      pos_hg38 = as.integer(stringr::str_extract(marker, "(?<=:)\\d+")),
+      z_pos0   = z_caqtl
+    ) %>%
+    add_ld_from_lead(LD_ca, lead_pos = pos)
+  
+  p.caqtl <- plot_qtl_scatter(
+    markers_df = markers_ca,
+    minStart   = minStart,
+    maxEnd     = maxEnd,
+    region     = region_zoom,
+    label_txt  = paste0("caQTL ", ca_var, " ", peak_name)
+  )
+  
+  # -------- eQTL scatter --------
+  prep_eq      <- prepare_eqtl_data(chr, gene_name, region_nochr, eq_var)
+  markers_eqtl <- prep_eq$markers
+  LD_eqtl      <- prep_eq$LD
+  
+  markers_eqtl <- markers_eqtl %>%
+    dplyr::mutate(
+      pos_hg38 = as.integer(stringr::str_extract(marker, "(?<=:)\\d+")),
+      z_pos0   = z_eqtl
+    ) %>%
+    add_ld_from_lead(LD_eqtl, lead_pos = pos)
+  
+  p.eqtl <- plot_qtl_scatter(
+    markers_df = markers_eqtl,
+    minStart   = minStart,
+    maxEnd     = maxEnd,
+    region     = region_zoom,
+    label_txt  = paste0("eQTL ", eq_var, " ", gene_name)
+  )
+  
+  # -------- coverage --------
+  track_data <- prepareTrackData_grouped_genotype(
+    variant_id = instrument,
+    metadata   = resources$metadata,
+    base_dir   = paths$base_dir,
+    bigwig_dir = paths$bigwig_dir
+  )
+  gene_range_zoom <- GenomicRanges::GRanges(chr, IRanges::IRanges(start_pos, end_pos))
+  p.peaks_zoom <- plotGroupedCoverage_allelic_fill(track_data, gene_range_zoom)
+  
+  # -------- peak delimiters --------
+  hits_gr <- GenomicRanges::GRanges(
+    seqnames = resources$bed_df$peak_chr,
+    ranges   = IRanges::IRanges(start = resources$bed_df$peak_start, end = resources$bed_df$peak_end),
+    name     = resources$bed_df$peak_name
+  )
+  p.peak_delim <- trackplot_peak_delim(hits_gr, region_zoom, color = "cyan4")
+  
+  # -------- links (Hi-C style) --------
+  p.links <- plot_region_links_hic(
+    resources$causality_bed,
+    instruments     = instrument,
+    chr             = chr,
+    x_start         = start_pos,
+    x_end           = end_pos,
+    draw_peaks_on_A = TRUE
+  )
+  
+  # -------- genes --------
+  track_genes <- build_gene_track_gencode(
+    region_zoom  = region_zoom,
+    transcripts  = resources$transcripts  # cached
+  )
+  
+  # -------- combine --------
+  track_plot <- trackplot_combine2(
+    list(
+      BPCells:::wrap_trackplot(p.caqtl,      grid::unit(0.10, "null")) + indiv_theme,
+      BPCells:::wrap_trackplot(p.eqtl,       grid::unit(0.10, "null")) + indiv_theme,
+      BPCells:::wrap_trackplot(p.peaks_zoom, grid::unit(0.15, "null")) + indiv_theme,
+      BPCells:::wrap_trackplot(p.peak_delim, grid::unit(0.05, "null")) + indiv_theme,
+      BPCells:::wrap_trackplot(p.links,      grid::unit(0.05, "null")) + indiv_theme,
+      BPCells:::wrap_trackplot(track_genes,  grid::unit(0.05, "null")) + indiv_theme
+    ),
+    title = title_txt
+  )
+  
+  if (!is.null(out_pdf)) {
+    ggplot2::ggsave(out_pdf, track_plot, width = width, height = height)
+  }
+  
+  list(
+    plot = track_plot,
+    meta = list(
+      instrument = instrument,
+      type = type,
+      chr = chr,
+      pos = pos,
+      gene = gene_name,
+      peak = peak_name,
+      region_zoom = region_zoom,
+      region_nochr = region_nochr,
+      zoom = zoom
+    )
+  )
+}
+
+setwd(paths_figure3$work_dir)
+source(paths_figure3$track_plots_helper)
+
+paths <- make_causality_plot_paths()
+resources <- load_causality_plot_resources(paths)
+
+
+ip <- parse_instrument_chrpos("7:142362517[b38]T,C")
+coloc_csv <- sprintf(paths$coloc_csv_tpl, ip$chr)
+
+coloc_results <- fread(coloc_csv) %>% as_tibble()
+
+gene_name="TRBV4-2"
+# pick the exact row you want (example: gene+peak)
+trip <- coloc_results %>%
+  dplyr::filter(gene == "TRBV4-2",
+                peak == "cd4_atac_summits_peak_83324a") %>%
+  dplyr::slice(1)
+
+gene_name <- trip$gene[[1]]
+
+res <- plot_from_coloc_triplet(
+  coloc_triplet_row = trip,
+  resources = resources,
+  paths = paths,
+  direction = "auto",  # <— IMPORTANT: for many triplets, “forward” isn’t the instrument in causality_bed
+  out_pdf = paste0(paths_figure3$causality_track_examples_dir, "/auto_triplet_", gene_name, ".pdf")
+)
+
+res$meta
+res$plot
+
+
+TRBV4_eqtl<-plot_eqtl_violin_from_string(
+  gene           = gene_name,
+  variant_string = "7:142362517[b38]T,C",
+  celltype       = "allcells"
+)
+
+
+TRBV6_eqtl<-plot_eqtl_violin_from_string(
+  gene           = "TRBV6-2",
+  variant_string = "7:142362517[b38]T,C",
+  celltype       = "allcells"
+)
+
+TRBV7_eqtl<-plot_eqtl_violin_from_string(
+  gene           = "TRBV7-2",
+  variant_string = "7:142362517[b38]T,C",
+  celltype       = "allcells"
+)
+
+
+eqtl.pt<-cowplot::plot_grid(TRBV4_eqtl, TRBV6_eqtl, TRBV7_eqtl, ncol=1)
+#ggsave("plots/causality_track_examples/qtl_regression_TRBV4_6_7-2.pdf", eqtl.pt, width = 3, height = 8)
+
+
+```
+
+```{r}
+p <- cowplot::plot_grid(
+  res$plot,
+  eqtl.pt,
+  rel_widths = c(1, 0.4)
+)
+
+print(p)
+```
+

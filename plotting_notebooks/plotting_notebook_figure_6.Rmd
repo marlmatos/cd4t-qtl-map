@@ -1,0 +1,602 @@
+---
+title: "plotting_nb_figure_6"
+author: "Marliette Matos"
+output: html_notebook
+---
+
+```{r figure-6-A, message=FALSE, warning=FALSE, fig.width=8, fig.height=8}
+
+source("config.local.R")
+
+.libPaths(c(
+  r_lib_path_44,
+  "/nfs/sw/easybuild/software/R/4.4.1-gfbf-2023b/lib/R/library"
+))
+
+# ============================================================
+# Reproduce Plot 2, Plot 3, and the combined figure
+# from the saved trait_locus_master table
+# ============================================================
+
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(scales)
+library(cowplot)
+
+
+paths <- paths_figure6
+
+# ------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------
+
+master_file <- paths$trait_locus_master
+
+output_dir <- paths$output_dir
+
+dir.create(
+  output_dir,
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+# Optional trait labels
+# Example:
+# trait_labels <- c(
+#   "IBD" = "Inflammatory bowel disease"
+# )
+
+trait_labels <- character(0)
+
+label_trait <- function(x) {
+  dplyr::recode(
+    x,
+    !!!trait_labels,
+    .default = x
+  )
+}
+
+# Use your original palette here if it is already defined.
+# Otherwise, these colors make the script self-contained.
+qtl_cmap_coloc <- c(
+  "just_eqtl"  = "#C7197C",
+  "just_caqtl" = "#9CCB86",
+  "both"       = "#0071BA"
+)
+
+# ------------------------------------------------------------
+# Load the canonical saved data frame
+# ------------------------------------------------------------
+
+trait_locus_master <- readr::read_csv(
+  master_file,
+  show_col_types = FALSE
+)
+
+required_columns <- c(
+  "trait",
+  "region",
+  "cs_index",
+  "region_cs",
+  "eqtl_coloc",
+  "caqtl_coloc",
+  "has_cbpnet_gwas_cs",
+  "has_cbpnet_qtl_cs"
+)
+
+missing_columns <- setdiff(
+  required_columns,
+  colnames(trait_locus_master)
+)
+
+if (length(missing_columns) > 0) {
+  stop(
+    "The master table is missing required columns: ",
+    paste(missing_columns, collapse = ", ")
+  )
+}
+
+# read_csv() should normally read these correctly, but this protects
+# against logical columns being stored as text.
+to_logical <- function(x) {
+  if (is.logical(x)) {
+    return(x)
+  }
+
+  tolower(as.character(x)) %in% c(
+    "true",
+    "t",
+    "1",
+    "yes"
+  )
+}
+
+trait_locus_master <- trait_locus_master %>%
+  mutate(
+    eqtl_coloc = to_logical(eqtl_coloc),
+    caqtl_coloc = to_logical(caqtl_coloc),
+    has_cbpnet_gwas_cs = to_logical(has_cbpnet_gwas_cs),
+    has_cbpnet_qtl_cs = to_logical(has_cbpnet_qtl_cs),
+
+    qtl_coloc_cs = eqtl_coloc | caqtl_coloc,
+
+    qtl_coloc_category = case_when(
+      eqtl_coloc & caqtl_coloc  ~ "both",
+      eqtl_coloc & !caqtl_coloc ~ "just_eqtl",
+      !eqtl_coloc & caqtl_coloc ~ "just_caqtl",
+      TRUE                      ~ "no_coloc"
+    ),
+
+    has_cbpnet_either_cs =
+      has_cbpnet_gwas_cs | has_cbpnet_qtl_cs,
+
+    cbpnet_category = case_when(
+      qtl_coloc_cs & has_cbpnet_either_cs ~
+        "QTL_coloc_with_ChromBPNet",
+
+      !qtl_coloc_cs & has_cbpnet_gwas_cs ~
+        "ChromBPNet_specific",
+
+      qtl_coloc_cs & !has_cbpnet_either_cs ~
+        "QTL_coloc_no_ChromBPNet",
+
+      TRUE ~
+        "Neither"
+    )
+  )
+
+# Confirm that each row is one unique trait–GWAS CS locus.
+duplicate_loci <- trait_locus_master %>%
+  dplyr::count(
+    trait,
+    region,
+    cs_index,
+    region_cs
+  ) %>%
+  filter(n > 1)
+
+if (nrow(duplicate_loci) > 0) {
+  stop(
+    "The master table contains duplicated trait–GWAS loci."
+  )
+}
+
+# ============================================================
+# Create summaries used by the plots
+# ============================================================
+
+coloc_table_summary <- trait_locus_master %>%
+  group_by(trait) %>%
+  summarise(
+    total_cond_indep = n(),
+
+    just_eqtl = sum(
+      qtl_coloc_category == "just_eqtl",
+      na.rm = TRUE
+    ),
+
+    just_caqtl = sum(
+      qtl_coloc_category == "just_caqtl",
+      na.rm = TRUE
+    ),
+
+    both = sum(
+      qtl_coloc_category == "both",
+      na.rm = TRUE
+    ),
+
+    .groups = "drop"
+  ) %>%
+  mutate(
+    trait_label = label_trait(trait),
+    total_coloc = just_eqtl + just_caqtl + both,
+
+    frac_coloc = if_else(
+      total_cond_indep > 0,
+      total_coloc / total_cond_indep,
+      0
+    )
+  )
+
+
+trait_summary <- trait_locus_master %>%
+  group_by(trait) %>%
+  summarise(
+    total_cs_all = n(),
+
+    cs_with_cbpnet_support = sum(
+      has_cbpnet_either_cs,
+      na.rm = TRUE
+    ),
+
+    cs_cbpnet_specific = sum(
+      cbpnet_category == "ChromBPNet_specific",
+      na.rm = TRUE
+    ),
+
+    cs_qtl_coloc_with_cbpnet = sum(
+      cbpnet_category == "QTL_coloc_with_ChromBPNet",
+      na.rm = TRUE
+    ),
+
+    .groups = "drop"
+  ) %>%
+  mutate(
+    trait_label = label_trait(trait),
+
+    prop_cs_with_cbpnet_support = if_else(
+      total_cs_all > 0,
+      cs_with_cbpnet_support / total_cs_all,
+      0
+    )
+  )
+
+# Display only traits with at least one QTL-colocalized locus.
+keep_traits <- coloc_table_summary %>%
+  filter(total_coloc > 0) %>%
+  pull(trait)
+
+coloc_table_summary_plot <- coloc_table_summary %>%
+  filter(trait %in% keep_traits)
+
+trait_summary_plot <- trait_summary %>%
+  filter(trait %in% keep_traits)
+
+# Use the same ordering in both panels.
+trait_order <- coloc_table_summary_plot %>%
+  arrange(
+    total_cond_indep,
+    trait_label
+  ) %>%
+  pull(trait_label)
+
+# ============================================================
+# Plot 2: QTL–GWAS colocalization
+# ============================================================
+
+plot2_df <- coloc_table_summary_plot %>%
+  dplyr::select(
+    trait,
+    trait_label,
+    total_cond_indep,
+    just_eqtl,
+    just_caqtl,
+    both
+  ) %>%
+  pivot_longer(
+    cols = c(
+      just_eqtl,
+      just_caqtl,
+      both
+    ),
+    names_to = "category",
+    values_to = "count"
+  ) %>%
+  mutate(
+    proportion = if_else(
+      total_cond_indep > 0,
+      count / total_cond_indep,
+      0
+    ),
+
+    category = factor(
+      category,
+      levels = c(
+        "just_eqtl",
+        "just_caqtl",
+        "both"
+      )
+    ),
+
+    trait_label = factor(
+      trait_label,
+      levels = trait_order
+    )
+  )
+
+
+plot2_total_loci <- coloc_table_summary_plot %>%
+  dplyr::select(
+    trait_label,
+    total_cond_indep
+  ) %>%
+  mutate(
+    trait_label = factor(
+      trait_label,
+      levels = trait_order
+    )
+  ) %>%
+  arrange(total_cond_indep)
+
+
+max_total_loci <- max(
+  plot2_total_loci$total_cond_indep,
+  na.rm = TRUE
+)
+
+scaling_factor_coloc <- ifelse(
+  max_total_loci > 0,
+  1 / max_total_loci,
+  1
+)
+
+
+plot2 <- ggplot(
+  plot2_df,
+  aes(
+    x = trait_label,
+    y = proportion,
+    fill = category
+  )
+) +
+  geom_col(
+    color = "gray40",
+    linewidth = 0.1
+  ) +
+  geom_text(
+    data = plot2_df %>%
+      filter(count > 0),
+    aes(label = count),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 6
+  ) +
+  geom_line(
+    data = plot2_total_loci,
+    aes(
+      x = trait_label,
+      y = total_cond_indep * scaling_factor_coloc,
+      group = 1
+    ),
+    inherit.aes = FALSE,
+    color = "gray50",
+    linewidth = 0.6,
+    linetype = "dashed"
+  ) +
+  geom_point(
+    data = plot2_total_loci,
+    aes(
+      x = trait_label,
+      y = total_cond_indep * scaling_factor_coloc
+    ),
+    inherit.aes = FALSE,
+    shape = 21,
+    fill = "gray30",
+    size = 4,
+    stroke = 0.3,
+    alpha = 0.5
+  ) +
+  scale_fill_manual(
+    values = qtl_cmap_coloc,
+    labels = c(
+      "just_eqtl" = "eQTL only",
+      "just_caqtl" = "caQTL only",
+      "both" = "eQTL + caQTL"
+    ),
+    drop = FALSE
+  ) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    expand = c(0.01, 0),
+    labels = percent_format(accuracy = 1),
+    name = paste0(
+      "Proportion of unique GWAS loci ",
+      "colocalized with QTLs"
+    ),
+    sec.axis = sec_axis(
+      ~ . / scaling_factor_coloc,
+      breaks = pretty(
+        c(0, max_total_loci)
+      ),
+      name = "Total unique GWAS loci per trait"
+    )
+  ) +
+  coord_flip() +
+  labs(
+    title = "Summary of QTL–GWAS colocalization",
+    x = "GWAS trait"
+  ) +
+  cowplot::theme_cowplot() +
+  theme(
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 18),
+    axis.title = element_text(
+      size = 14,
+      face = "bold"
+    ),
+    legend.position = "bottom",
+    legend.justification = "center",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 14),
+    axis.text.x.bottom = element_text(
+      size = 12,
+      color = "black"
+    ),
+    axis.text.x.top = element_text(
+      size = 12,
+      color = "gray50"
+    ),
+    axis.title.x.top = element_text(
+      size = 14,
+      color = "gray50"
+    )
+  )
+
+# ============================================================
+# Plot 3: ChromBPNet support
+# ============================================================
+
+plot3_df <- trait_summary_plot %>%
+  dplyr::select(
+    trait,
+    trait_label,
+    total_cs_all,
+    cs_cbpnet_specific,
+    cs_qtl_coloc_with_cbpnet
+  ) %>%
+  pivot_longer(
+    cols = c(
+      cs_cbpnet_specific,
+      cs_qtl_coloc_with_cbpnet
+    ),
+    names_to = "cbpnet_cat",
+    values_to = "cs_n"
+  ) %>%
+  mutate(
+    cbpnet_cat = recode(
+      cbpnet_cat,
+      cs_cbpnet_specific =
+        "ChromBPNet_specific",
+      cs_qtl_coloc_with_cbpnet =
+        "QTL_coloc_with_ChromBPNet"
+    ),
+
+    cbpnet_cat = factor(
+      cbpnet_cat,
+      levels = c(
+        "ChromBPNet_specific",
+        "QTL_coloc_with_ChromBPNet"
+      )
+    ),
+
+    prop = if_else(
+      total_cs_all > 0,
+      cs_n / total_cs_all,
+      0
+    ),
+
+    trait_label = factor(
+      trait_label,
+      levels = trait_order
+    )
+  )
+
+
+plot3_labels <- trait_summary_plot %>%
+  filter(cs_with_cbpnet_support > 0) %>%
+  mutate(
+    trait_label = factor(
+      trait_label,
+      levels = trait_order
+    )
+  )
+
+
+plot3 <- ggplot(
+  plot3_df,
+  aes(
+    x = trait_label,
+    y = prop,
+    fill = cbpnet_cat
+  )
+) +
+  geom_col(
+    color = "gray40",
+    linewidth = 0.1
+  ) +
+  geom_text(
+    data = plot3_labels,
+    aes(
+      x = trait_label,
+      y = prop_cs_with_cbpnet_support / 2,
+      label = cs_with_cbpnet_support
+    ),
+    inherit.aes = FALSE,
+    color = "black",
+    size = 6
+  ) +
+  scale_fill_manual(
+    values = c(
+      "ChromBPNet_specific" = "#0071BA",
+      "QTL_coloc_with_ChromBPNet" = "#F7D58B"
+    ),
+    labels = c(
+      "ChromBPNet_specific" =
+        "ChromBPNet only",
+
+      "QTL_coloc_with_ChromBPNet" =
+        "ChromBPNet + QTL colocalization"
+    )
+  ) +
+  scale_y_continuous(
+    limits = c(0, 0.30),
+    breaks = seq(
+      0,
+      0.30,
+      0.05
+    ),
+    labels = percent_format(accuracy = 1),
+    expand = c(0.01, 0),
+    name = paste0(
+      "Proportion of unique GWAS loci ",
+      "with ChromBPNet support"
+    )
+  ) +
+  coord_flip() +
+  cowplot::theme_cowplot() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(size = 14),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title = element_text(
+      size = 16,
+      face = "bold"
+    ),
+    legend.position = "bottom",
+    legend.justification = "center",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 14)
+  )
+
+# ============================================================
+# Plot 4: Combined figure
+# ============================================================
+
+plot2_compact <- plot2 +
+  theme(
+    plot.margin = margin(
+      t = 5,
+      r = 2,
+      b = 5,
+      l = 5
+    )
+  )
+
+plot3_compact <- plot3 +
+  theme(
+    plot.margin = margin(
+      t = 5,
+      r = 5,
+      b = 5,
+      l = 2
+    )
+  )
+
+
+combined_plot <- cowplot::plot_grid(
+  plot2_compact,
+  plot3_compact,
+  nrow = 1,
+  align = "h",
+  axis = "tb",
+  rel_widths = c(2, 0.5)
+)
+
+# Display all three plot objects
+plot2
+plot3
+combined_plot
+
+
+
+```
+
+
+```{r figure-6-B, message=FALSE, warning=FALSE, fig.width=8, fig.height=8}
+
+```

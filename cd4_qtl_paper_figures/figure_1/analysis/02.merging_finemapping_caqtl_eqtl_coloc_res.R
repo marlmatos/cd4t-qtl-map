@@ -1,4 +1,28 @@
-.libPaths(c("/gchm/R/x86_64-pc-linux-gnu-library/4.4","/nfs/sw/easybuild/software/R/4.4.1-gfbf-2023b/lib/R/library"))
+# ============================================================
+# Integrate fine-mapped eQTL and caQTL credible sets with
+# eQTL–caQTL colocalization results across chromosomes.
+#
+# The script:
+#   1. Classifies fine-mapped caQTL variants by overlap with:
+#        C1: their assigned accessibility peak
+#        C2: a peak correlated with the assigned peak
+#        C3: another accessible peak
+#        C4: no accessible peak
+#   2. Summarizes these annotations hierarchically at the
+#      credible-set level.
+#   3. Merges caQTL and eQTL fine-mapping results with
+#      colocalization results.
+#   4. Assigns each signal as colocalized, caQTL-only,
+#      or eQTL-only.
+#   5. Writes chromosome-specific outputs and combines them
+#      into genome-wide variant-level and credible-set-level
+#      summary tables.
+#
+# Chromosomes are processed in parallel with BiocParallel.
+# ============================================================
+
+
+.libPaths(fig1_paths$r_env)
 library(dplyr)
 library(readr)
 library(stringr)
@@ -10,16 +34,16 @@ library(rcartocolor)
 library(pheatmap)
 library(stringr)
 options(bitmapType = "cairo")
-source("/gchm/cd4_qtl_paper_figures/figure_1/helper_functions.R")
+source(fig1_paths$helper_functions_file)
 library(BiocParallel)
 register(MulticoreParam(workers = 8))  # or SnowParam() for SLURM
 
 # File paths
-coloc_files <- system("ls /gcgl/sghatan/marlis_pj/coloc/coloc_results/ca_eqtl_coloc/*_coloc_results.csv", intern = TRUE)
-eqtl_finemapping_files <- system("ls /gcgl/sghatan/marlis_pj/coloc/SuSiE_finemap_credible_sets/All_CD4T_cells/All_CD4T_cells_chr*_credible_sets.txt", intern = TRUE)
-caqtl_finemapping_files <- system("ls /gcgl/sghatan/marlis_pj/coloc/SuSiE_finemap_credible_sets/CD4T_chromatin/CD4T_chromatin_chr*_credible_sets.txt", intern = TRUE)
-peak_count_path <- "/gchm/ATAC-seq_analysis/diff_accesibility_ana/results/peak_counts/RAW_cd4_atac_peakcounts_ranges_scrna_union.csv"
-correlation_results <- read.csv("~/cd4_qtl_paper_figures/figure_1/data/caPeak_coacc_correlation_results_allchrs.csv")
+coloc_files <- system(paste("ls", fig1_paths$coloc_files), intern = TRUE)
+eqtl_finemapping_files <- system(paste("ls", fig1_paths$eqtl_finemapping_files), intern = TRUE)
+caqtl_finemapping_files <- system(paste("ls", fig1_paths$caqtl_finemapping_files), intern = TRUE)
+peak_count_path <- fig1_paths$peak_count_path
+correlation_results <- read.csv(fig1_paths$correlation_results_file)
 
 # Load peak data
 ranges.table <- read.csv2(peak_count_path, sep = ",") %>%
@@ -168,8 +192,7 @@ summarise_coloc <- function(x, gr, lead_corr_df, lead_to_corr, target_gr) {
       chromosome = chr[x]
     )
   # Write to file
-  out.dir<-"/gcgl/mmatos/cd4_aging_project/cd4_qtl_data/colocalization/caqtl_eqtl_coloc_finemapped/"
-  allres_outfile <- file.path(out_dir, paste0("eqtl_caqtl_finemap_coloc_summary_chr", chr[x], ".tsv.gz"))
+  allres_outfile <- file.path(fig1_paths$out.dir, paste0("eqtl_caqtl_finemap_coloc_summary_chr", chr[x], ".tsv.gz"))
 
   write_tsv(allres, allres_outfile)
   return(list(allres = allres, coloc_simple = coloc_simple))
@@ -188,16 +211,9 @@ coloc_simple_all <- bind_rows(lapply(results, `[[`, "coloc_simple"))
 
 
 #a credible-set level ccolocalization summary between peaks and genes
-write_delim(summary_df, "/gchm/cd4_qtl_paper_figures/figure_1/data/eqtl_caqtl_finemapping_coloc_all.tsv", delim = "\t") # a variant level colocalization (all finemappped)
-write_delim(coloc_simple_all, "/gchm/cd4_qtl_paper_figures/figure_1/data/eqtl_caqtl_coloc_allchrs.tsv", delim = "\t") #a credible-set level ccolocalization summary between peaks and genes
+write_delim(summary_df, fig1_paths$eqtl_caqtl_finemapping_coloc_all_file, delim = "\t") # a variant level colocalization (all finemappped)
+write_delim(coloc_simple_all, fig1_paths$eqtl_caqtl_coloc_allchrs_file, delim = "\t") #a credible-set level ccolocalization summary between peaks and genes
 
 
 print("Finished!")
-
-# out.dir<-"/gcgl/mmatos/cd4_aging_project/cd4_qtl_data/colocalization/caqtl_eqtl_coloc_finemapped/"
-# 
-# summary_df %>%
-#   group_by(chromosome) %>%
-#   group_walk(~ write_tsv(.x, file = file.path(out.dir, paste0("eqtl_caqtl_finemap_coloc_summary_", .y$chromosome, ".tsv"))))
-
 

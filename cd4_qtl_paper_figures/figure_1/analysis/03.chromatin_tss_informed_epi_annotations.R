@@ -1,4 +1,26 @@
-.libPaths(c("/gchm/R/x86_64-pc-linux-gnu-library/4.4","/nfs/sw/easybuild/software/R/4.4.1-gfbf-2023b/lib/R/library"))
+# ============================================================
+# Annotate chromatin-accessibility peaks by genomic context and
+# ChromBPNet motif content.
+#
+# The script:
+#   1. Loads the filtered set of chromatin-accessibility peaks.
+#   2. Classifies each peak as promoter or distal based on
+#      direct overlap with a gene transcription start site.
+#   3. Imports ChromBPNet motif instances from a BED file.
+#   4. Counts the number of occurrences of each motif within
+#      every accessibility peak.
+#   5. Constructs a peak-by-motif count matrix and appends the
+#      motif counts to the peak annotation table.
+#   6. Saves the resulting peak-level annotations for use in
+#      downstream enrichment and visualization analyses.
+#
+# Promoter status is defined using exact TSS overlap without an
+# additional flanking window; all remaining peaks are classified
+# as distal regulatory elements.
+# ============================================================
+
+
+.libPaths(fig1_paths$r_env)
 
 library(ggplot2)
 library(dplyr)
@@ -10,8 +32,8 @@ library(forcats)
 
 options(bitmapType = "cairo")
 
-peak_coords <- read_tsv("/gcglm/cd4_aging_project/data/ATAC-seq/atac_preprocessing/merged_library/peak_calling/MACS3/BAMPE/peaks_102024/cd4_atac_padded_summits_peaks.bed", col_names = NULL)
-peaks_names<-read.delim2("/gchm/cd4_caQTL_analysis/variant_to_peak_QTL/run_012625_qc_aware_qsmooth_CPM_MAF5_FDR5_1MB/results/003_inputs/filtered_qsmooth_norm_cpm/cd4_atac_processed_peaks_coordinates.bed")$peak_name
+peak_coords <- read_tsv(fig1_paths$peak_coords_file, col_names = NULL)
+peaks_names<-read.delim2(fig1_paths$peaks_names_file)$peak_name
 peak_coords <-peak_coords[peak_coords$X4 %in% peaks_names,]
 peak_coordsGR <- GRanges(peak_coords$X1, IRanges(peak_coords$X2, peak_coords$X3), peak_name = peak_coords$X4)
 
@@ -19,7 +41,7 @@ peak_coordsGR <- GRanges(peak_coords$X1, IRanges(peak_coords$X2, peak_coords$X3)
 names(peak_coordsGR) <- peak_coordsGR$peak_name
 
 #read the gencode gene annotation
-gencode <- fread("~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.genes.bed",
+gencode <- fread(fig1_paths$gencode_file,
                  sep="\t", data.table=FALSE) %>%
   #filter(V8 == "protein_coding",
   #      grepl("^chr(\\d+|X|Y)$", V1)) %>%                 # drop alts/patches
@@ -64,9 +86,9 @@ peak_annotation <- tibble(
 
 # peek
 dplyr::count(peak_annotation, annotation)
-saveRDS(peak_annotation, "~/cd4_qtl_paper_figures/figure_1/data/rel_tss_distance_CRE_peak_annotation.rds")
+saveRDS(peak_annotation, fig1_paths$peak_annotation_file)
 
-saveRDS(peak_annotation, "~/cd4_qtl_paper_figures/figure_1/data/rel_tss_distance_CRE_peak_annotation_nowindow.rds")
+saveRDS(peak_annotation, fig1_paths$peak_annotation_no_window_file)
 
 
 #### peak overlaps with 
@@ -75,7 +97,7 @@ library(GenomicRanges)
 library(Matrix)
 library(dplyr)
 
-chrombpnet_motifs <- rtracklayer::import("/gchm/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/motif_instances/motifs_with_tf_annotated_filt_c90_40seq_unique.bed", format="BED")
+chrombpnet_motifs <- rtracklayer::import(fig1_paths$chrombpnet_motifs_file, format="BED")
 
 ov_motif  <- countOverlaps(peak_coordsGR, chrombpnet_motifs, ignore.strand = TRUE)
 
@@ -112,7 +134,7 @@ if (is.null(peak_name)) {
 
 stopifnot(nrow(motif_mat) == length(peak_name))
 
-## 4A) (Option 1) Dense wide table then join
+## 4A)Dense wide table then join
 motif_counts <- as_tibble(as.matrix(motif_mat)) |>
   add_column(peak_name = peak_name, .before = 1)
 
@@ -122,4 +144,4 @@ peak_annotation <- peak_annotation |>
 motif_cols <- setdiff(names(motif_counts), "peak_name")
 peak_annotation <- peak_annotation |>
   mutate(across(all_of(motif_cols), ~ tidyr::replace_na(., 0L)))
-saveRDS(peak_annotation, "~/cd4_qtl_paper_figures/figure_1/data/rel_tss_distance_CRE_peak_annotation_nowindow.rds")
+saveRDS(peak_annotation, fig1_paths$peak_annotation_no_window_file)
