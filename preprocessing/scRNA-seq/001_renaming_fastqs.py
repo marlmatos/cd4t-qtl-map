@@ -5,14 +5,14 @@ import shutil
 
 # List of input directories containing your FASTQ files
 input_directories = [
-    "/gchm/scRNAseq/data/fastq_files/flowcell_1/",
-    "/gchm/scRNAseq/data/fastq_files/flowcell_2/",
-    "/gchm/scRNAseq/data/fastq_files/flowcell_3/",
-    "/gchm/scRNAseq/data/fastq_files/flowcell_4/"
+    "~/scRNAseq/data/fastq_files/flowcell_1/",
+    "~/scRNAseq/data/fastq_files/flowcell_2/",
+    "~/scRNAseq/data/fastq_files/flowcell_3/",
+    "~/scRNAseq/data/fastq_files/flowcell_4/"
 ]
 
 # Directory to store the copied files
-output_directory = "/gchm/scRNAseq/data/fastq_files/renamed"
+output_directory = "~/scRNAseq/data/fastq_files/renamed"
 
 # Iterate through each input directory
 for input_directory in input_directories:

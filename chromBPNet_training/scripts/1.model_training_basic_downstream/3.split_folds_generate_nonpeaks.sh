@@ -13,14 +13,14 @@ module load chrombpnet
 module load bedtools
 
 # Create output directories
-mkdir -p /gchm/cd4_chrombpnet/data/splits/
+mkdir -p ~/cd4_chrombpnet/data/splits/
 mkdir -p logs
 
 # Path to input files
-peaks_file="/gchm/cd4_chrombpnet/data/inputs/peaks/merged_cd4_samples_peaks_no_blacklist.sorted.bed"
-genome_file="/gchm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa"
-chrom_sizes="/gchm/cd4_chrombpnet/data/inputs/hg38.autosomes.chrom.sizes" 
-blacklist_file="/gchm/cd4_chrombpnet/data/inputs/peaks/blacklist_autosomes.bed" 
+peaks_file="~/cd4_chrombpnet/data/inputs/peaks/merged_cd4_samples_peaks_no_blacklist.sorted.bed"
+genome_file="~/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa"
+chrom_sizes="~/cd4_chrombpnet/data/inputs/hg38.autosomes.chrom.sizes" 
+blacklist_file="~/cd4_chrombpnet/data/inputs/peaks/blacklist_autosomes.bed" 
 
 # Predefined test and validation chromosomes for each fold
 test_fold0=("chr1" "chr3" "chr6" "chr14")
@@ -36,8 +36,8 @@ val_fold3=("chr6" "chr21")
 val_fold4=("chr10" "chr18")
 
 # Base directory for outputs
-output_dir="/gchm/cd4_chrombpnet/data/splits"
-output_dir2="/gchm/cd4_chrombpnet/data/folds"
+output_dir="~/cd4_chrombpnet/data/splits"
+output_dir2="~/cd4_chrombpnet/data/folds"
 
 # Loop through each fold (0-4)
 for fold_num in {0..4}; do

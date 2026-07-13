@@ -1,7 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name=download     # Job name
 #SBATCH --mail-type=END,FAIL          # Mail events (NONE, BEGIN, END, FAIL, ALL)
-#SBATCH --mail-user=marliette.rodriguezmatos@einsteinmed.edu
 #SBATCH -p pe2 
 #SBATCH -t 7-00:00:00
 #SBATCH --cpus-per-task=4                   

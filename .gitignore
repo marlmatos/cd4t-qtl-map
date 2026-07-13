@@ -41,3 +41,6 @@
 *.csv
 *.gtf.gz
 *.svg
+*/config.local.R
+*/config.local.py
+*/paths_config.R

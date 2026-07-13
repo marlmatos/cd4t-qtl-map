@@ -1,7 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name=prepare_fasta    # Job name
 #SBATCH --mail-type=END,FAIL          # Mail events (NONE, BEGIN, END, FAIL, ALL)
-#SBATCH --mail-user=marliette.rodriguezmatos@einsteinmed.edu
 #SBATCH -p pe2 
 #SBATCH -t 7-00:00:00
 #SBATCH --cpus-per-task=4                   
@@ -21,8 +20,8 @@
 ##                                                       ##
 ###########################################################
 
-root="/gchm/resources/genome/hg38_gencode_raw"
-wdir="/gchm/resources/genome/hg38_gencode_PRI_align"
+root="~/resources/genome/hg38_gencode_raw"
+wdir="~/resources/genome/hg38_gencode_PRI_align"
 
 module load samtools/1.15
 
