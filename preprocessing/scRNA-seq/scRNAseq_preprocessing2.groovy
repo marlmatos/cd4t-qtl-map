@@ -42,32 +42,32 @@
 // Parameters / directories
 // -----------------------------------------------------------------------------
 
-params.input              = '/gchm/scRNAseq/data/fastq_files/renamed/*_R{1,2}_001.fastq.gz'
-params.outdir             = '/gchm/scRNAseq/sc_lib_preprocessing/results/03.27.24_preprocessing'
-params.barcode_whitelist  = '/gchm/scRNAseq/sc_lib_preprocessing/resources/10x_V3_barcode_whitelist.txt.gz'
+params.input              = '~/scRNAseq/data/fastq_files/renamed/*_R{1,2}_001.fastq.gz'
+params.outdir             = '~/scRNAseq/sc_lib_preprocessing/results/03.27.24_preprocessing'
+params.barcode_whitelist  = '~/scRNAseq/sc_lib_preprocessing/resources/10x_V3_barcode_whitelist.txt.gz'
 
 params.aligner            = 'star'
 params.protocol           = '10XV3'
 params.genome             = 'GRCh38'
 
-params.wasp_VCF           = '/gchm/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4p_WGS_pass_only.snps.maf1.WASP.vcf'      // created with 001_preparing_wasp_vcf.sh
-params.samples_VCF        = '/gchm/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4_allsamples_common_maf1.vcf.gz'            // created with 002_preparing_demultiplexing_vcf.sh
-params.commmon_vars       = '/gchm/reference_genomes/1KG_common_SNPs/common_variants_grch38_chr_format.vcf'
+params.wasp_VCF           = '~/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4p_WGS_pass_only.snps.maf1.WASP.vcf'      // created with 001_preparing_wasp_vcf.sh
+params.samples_VCF        = '~/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4_allsamples_common_maf1.vcf.gz'            // created with 002_preparing_demultiplexing_vcf.sh
+params.commmon_vars       = '~/reference_genomes/1KG_common_SNPs/common_variants_grch38_chr_format.vcf'
 
 // see 001_download_hg38.sh and 002_prepare_fasta.sh
-params.fasta              = '/gchm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa'
-params.fai                = '/gchm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa.fai'
-params.gtf                = '/gchm/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.gtf'
-params.STAR_index         = '/gchm/resources/genome/hg38_gencode_PRI_align'
+params.fasta              = '~/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa'
+params.fai                = '~/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa.fai'
+params.gtf                = '~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.gtf'
+params.STAR_index         = '~/resources/genome/hg38_gencode_PRI_align'
 
-params.matrix_script1     = '/gchm/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/soloCOUNTmatrixFromBam.py'
-params.matrix_script2     = '/gchm/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/header_matrix.py'
-params.corr_script        = '/gchm/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/demulti_corr.r'
+params.matrix_script1     = '~/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/soloCOUNTmatrixFromBam.py'
+params.matrix_script2     = '~/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/header_matrix.py'
+params.corr_script        = '~/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/demulti_corr.r'
 
-params.Rscript            = '/gchm/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/batch_txt_script.r'
-params.metadata           = '/gchm/metadata_harmonizing/results/post_WGS_QC/version_080923/revision_103023/cd4_scRNAseq_meta.v2.csv'
+params.Rscript            = '~/scRNAseq/sc_lib_preprocessing/scripts/scrnaseq_preprocessing_nextflow/batch_txt_script.r'
+params.metadata           = '~/scRNAseq/sc_lib_preprocessing/resources/metadata_harmonizing/results/post_WGS_QC/version_080923/revision_103023/cd4_scRNAseq_meta.v2.csv'
 
-params.STAR_align_output  = '/gchm/scRNAseq/sc_lib_preprocessing/results/03.27.24_preprocessing/STAR/scGEX-A*'
+params.STAR_align_output  = '~/scRNAseq/sc_lib_preprocessing/results/03.27.24_preprocessing/STAR/scGEX-A*'
 
 params.expected_cells     = 25000
 params.expected_clusters  = 12

@@ -27,13 +27,12 @@ export PYTHONPATH=$CONDA_PREFIX/lib/python3.10/site-packages:$PYTHONPATH
 # Set PATH to prioritize conda binaries
 export PATH=$CONDA_PREFIX/bin:$PATH
 
-HOME_DIR=/gchm
-OUTPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/motif_hit_calls/motifs_hits_FILTVARS
+OUTPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/motif_hit_calls/motifs_hits_FILTVARS
 
 mkdir -p $OUTPUT_DIR
 
 # Original variant file
-variants=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores/cd4_top_cpbnet_variants_noheader.tsv
+variants=$HOME/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores/cd4_top_cpbnet_variants_noheader.tsv
 
 # Create a file with NO header - it's cleaner this way since the script will add column names
 #variant_no_header=${OUTPUT_DIR}/variants_no_header.tsv
@@ -43,9 +42,9 @@ variants=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/
 echo "Checking file format (first few lines):"
 head -n 3 $variants
 
-hitcaller_script=$HOME_DIR/packages/variant-scorer/src/hitcaller_variant.py
-shap_data=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/variant_contribution_scores/averaged_cd4_tcells_AJ_common_variants.shap.counts.h5
-modisco=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/model/tfmodisco_motifs_count_contributions.h5
+hitcaller_script=$HOME/packages/variant-scorer/src/hitcaller_variant.py
+shap_data=$HOME/cd4_chrombpnet/chrombpnet_model_b7/variant_contribution_scores/averaged_cd4_tcells_AJ_common_variants.shap.counts.h5
+modisco=$HOME/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/model/tfmodisco_motifs_count_contributions.h5
 
 python $hitcaller_script \
   --shap_data $shap_data \

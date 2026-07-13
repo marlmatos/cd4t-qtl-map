@@ -1,7 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name=bcftools     # Job name
 #SBATCH --mail-type=END,FAIL          # Mail events (NONE, BEGIN, END, FAIL, ALL
-#SBATCH --mail-user=marliette.rodriguezmatos@einsteinmed.edu    
 #SBATCH -p normal 
 #SBATCH -t 2-00:00:00
 #SBATCH --nodes=2                    # Run on a single CPU
@@ -10,7 +9,7 @@
 
 conda activate genomic_tools
 
-fasta=/ggum/genome/Gencove_WGS/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna
+fasta=~/genome/Gencove_WGS/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna
 
 #plink2 --vcf merged_CD4p_WGS_pass_only.vcf.gz \
  #   --const-fid 0 \
@@ -28,7 +27,7 @@ fasta=/ggum/genome/Gencove_WGS/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna
  #   --export vcf \
  #   --out CD4p_WGS_pass_only.snps.maf05
 
-dir=/ggum/aging_project/ATAC-seq_analysis/scripts/nf-core_atac/try_11072023_star_allele_specfic/var_vcf
+dir=~/aging_project/ATAC-seq_analysis/scripts/nf-core_atac/try_11072023_star_allele_specfic/var_vcf
 plink2 --bfile CD4p_WGS_pass_only.snps.maf05 \
     --fa $fasta --ref-from-fa \
     --export vcf \

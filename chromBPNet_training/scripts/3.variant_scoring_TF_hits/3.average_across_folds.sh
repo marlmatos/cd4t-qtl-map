@@ -4,26 +4,20 @@
 #SBATCH --mem=10G
 #SBATCH --gres=gpu
 #SBATCH --time=24:00:00                # total run time limit (HH:MM:SS)
-#SBATCH --output=logs/var_summary_%A.log  # Standard output with array job ID
-#SBATCH --error=logs/var_summary_%A.err   # Error log with array job ID
-#SBATCH --mail-type=END,FAIL           # Mail events (NONE, BEGIN, END, FAIL, ALL)
-#SBATCH --mail-user=mmatos@nygenome.org  # Where to send mail
 
 # Load modules for singularity
 module purge
 source /usr/share/lmod/lmod/init/bash
 module load singularity
 
-# Define full home path to replace tilde
-HOME_DIR=/gchm
 
 # Define singularity image
-singularity_image=$HOME_DIR/packages/chrombpnet_latest.sif
+singularity_image=$HOME/packages/chrombpnet_latest.sif
 
 # Define directories
-PERFOLD_PERCHROM_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/perfold_perchrom
-PERFOLD_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/perfold
-OUTPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores
+PERFOLD_PERCHROM_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/perfold_perchrom
+PERFOLD_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/perfold
+OUTPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/averaged_scores
 MODIFIED_HELPERS_DIR="/gchm/packages/variant-scorer/src/"
 
 # Create output directories
@@ -67,12 +61,12 @@ done
 echo "Running summary across folds..."
 
 # Define script paths
-summary_script=$HOME_DIR/packages/variant-scorer/src/variant_summary_across_folds.py
-annotation_script=$HOME_DIR/packages/variant-scorer/src/variant_annotation.py
+summary_script=$HOME/packages/variant-scorer/src/variant_summary_across_folds.py
+annotation_script=$HOME/packages/variant-scorer/src/variant_annotation.py
 
 # Define other paths
-peaks=$HOME_DIR/cd4_chrombpnet/data/inputs/peaks/merged_cd4_samples_peaks_no_blacklist.sorted.bed
-genes=$HOME_DIR/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.genes.bed
+peaks=$HOME/cd4_chrombpnet/data/inputs/peaks/merged_cd4_samples_peaks_no_blacklist.sorted.bed
+genes=$HOME/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.genes.bed
 out_prefix=$OUTPUT_DIR/average_cd4_tcells_AJ_common_variants
 
 # Create a list of concatenated score files for all folds
@@ -92,9 +86,9 @@ singularity exec --nv \
   --env MPLCONFIGDIR=/tmp \
   --env PYTHONPATH="$MODIFIED_HELPERS_DIR:$PYTHONPATH" \
   --no-home \
-  -B $HOME_DIR/packages \
-  -B $HOME_DIR/cd4_chrombpnet \
-  -B $HOME_DIR/resources \
+  -B $HOME/packages \
+  -B $HOME/cd4_chrombpnet \
+  -B $HOME/resources \
   -B /gchm/ \
   -B $OUTPUT_DIR \
   -B $PERFOLD_DIR \

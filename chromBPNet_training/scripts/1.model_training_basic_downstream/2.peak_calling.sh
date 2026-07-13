@@ -5,35 +5,32 @@
 #SBATCH --mem=100G                          # Memory per node (increased for merge)
 #SBATCH --cpus-per-task=8                  # CPU cores for the task
 #SBATCH --time=2-00:00:00                    # Time limit (HH:MM:SS)
-#SBATCH --output=logs/atac_prep_chrombnet_%j.log # Standard output log
-#SBATCH --error=logs/atac_prep_chrombnet_%j.err  # Standard error log
-#SBATCH --mail-type=END,FAIL              # Mail events
-#SBATCH --mail-user=mmatos@nygenome.org   # Where to send mail
 
 # Load necessary modules
 module load singularity
 module load samtools
 module load bedtools
+source("~/cd4t-qtl-map/chromBPNet_training/scripts/1.model_training_basic_downstream/utils/paths_config.R")
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
 # Create output directory
-output_dir="/gchm/cd4_chrombpnet/data/inputs"
+output_dir="~/cd4_chrombpnet/data/inputs"
 mkdir -p "$output_dir"
 
 # Input directory where BAM files are located
-bam_dir="/gcgl/mmatos/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/filtered_bams"
+bam_dir="script2$bam_dir"
 
 # Path to the text file containing sample names
-samples_file="/gchm/cd4_chrombpnet/data/atac_high_read_depth_samples.txt"
+samples_file="script2$samples_file"
 
 # Reference files
-blacklist_file="/gchm/resources/genome/hg38_gencode_raw/hg38-blacklist.v3.bed" 
-chrom_sizes_file="/gchm/resources/genome/hg38.p14.chrom.sizes.fmtd" 
+blacklist_file="~/resources/genome/hg38_gencode_raw/hg38-blacklist.v3.bed" 
+chrom_sizes_file="~/resources/genome/hg38.p14.chrom.sizes.fmtd" 
 
 # Path to the singularity image
-singularity_img="/gchm/.singularity/singularity_images_nextflow/depot.galaxyproject.org-singularity-macs3-3.0.1--py310h1af8fb7_3.img"
+singularity_img="~/.singularity/singularity_images_nextflow/depot.galaxyproject.org-singularity-macs3-3.0.1--py310h1af8fb7_3.img"
 
 # Set genome size (human genome)
 genome_size="2.86e9"

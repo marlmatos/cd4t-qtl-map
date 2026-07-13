@@ -20,30 +20,30 @@
 // -----------------------------------------------------------------------------
 params {
     // Genome resources (see 001_download_hg38.sh / 002_prepare_fasta.sh)
-    fasta      = '/gcjm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa'
-    fai        = '/gcjm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa.fai'
-    gtf        = '/gcjm/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.gtf'
-    STAR_index = '/gcjm/resources/genome/hg38_gencode_PRI_align'
+    fasta      = '~/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa'
+    fai        = '~/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa.fai'
+    gtf        = '~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.gtf'
+    STAR_index = '~/resources/genome/hg38_gencode_PRI_align'
 
-    bed        = '/gcjm/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.bed'
-    gene_TSS   = '/gcjm/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.tss.bed'
-    chromsizes = '/gcjm/resources/genome/hg38.p14.chrom.sizes.fmtd'
-    blacklist  = '/gcjm/resources/genome/hg38_gencode_raw/hg38-blacklist.v3.bed'
+    bed        = '~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.bed'
+    gene_TSS   = '~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.tss.bed'
+    chromsizes = '~/resources/genome/hg38.p14.chrom.sizes.fmtd'
+    blacklist  = '~/resources/genome/hg38_gencode_raw/hg38-blacklist.v3.bed'
 
     // Inputs / outputs
     results    = '/gcgl/mmatos/cd4_aging_project/data/ATAC-seq/atac_preprocessing'
     data       = '/gcgl/mmatos/cd4_aging_project/data/ATAC-seq/Project_LAP_15324_B01_NAN_Lane.2023-06-06/Sample_*/fastq/*.R{1,2}.fastq.gz'
-    datatest   = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/data/cd4_project_atac_fastqs/Project_LAP_15324_B01_NAN_Lane.2023-06-06/Sample_T2612/fastq/*.fastq.gz'
+    datatest   = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/data/cd4_project_atac_fastqs/Project_LAP_15324_B01_NAN_Lane.2023-06-06/Sample_T2612/fastq/*.fastq.gz'
 
     // Trimming / WASP
-    adapter    = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/assets/NexteraPE-PE.fa'
-    varVCF     = '/gcjm/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4p_WGS_pass_only.snps.maf1.WASP.vcf'  // created with 001_preparing_wasp_vcf.sh
+    adapter    = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/assets/NexteraPE-PE.fa'
+    varVCF     = '~/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4p_WGS_pass_only.snps.maf1.WASP.vcf'  // created with 001_preparing_wasp_vcf.sh
 
     // Custom scripts/assets
-    bam_filter                 = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/bamtools_filtering_script.json'
-    bampe_rm_orphan            = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/nfcore_remove_orphans.py'
-    macs2_merged_expand_script = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/macs2_merged_expand.py'
-    plot_peak_intersect_script = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/plot_peak_intersect.r'
+    bam_filter                 = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/bamtools_filtering_script.json'
+    bampe_rm_orphan            = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/nfcore_remove_orphans.py'
+    macs2_merged_expand_script = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/macs2_merged_expand.py'
+    plot_peak_intersect_script = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/plot_peak_intersect.r'
 
     // Other
     macs_gsize = 'hs'

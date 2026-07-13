@@ -15,36 +15,36 @@
 // -----------------------------------------------------------------------------
 
 // Resources (see: 001_download_hg38.sh and 002_prepare_fasta.sh)
-params.fasta      = '/gcjm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa'
-params.fai        = '/gcjm/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa.fai'
-params.gtf        = '/gcjm/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.gtf'
-params.STAR_index = '/gcjm/resources/genome/hg38_gencode_PRI_align'
+params.fasta      = '~/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa'
+params.fai        = '~/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa.fai'
+params.gtf        = '~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.gtf'
+params.STAR_index = '~/resources/genome/hg38_gencode_PRI_align'
 
-params.bed        = '/gcjm/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.bed'
-params.gene_TSS   = '/gcjm/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.tss.bed'
-params.chromsizes = '/gcjm/resources/genome/hg38.p14.chrom.sizes.fmtd'
-params.blacklist  = '/gcjm/resources/genome/hg38_gencode_raw/hg38-blacklist.v3.bed'
+params.bed        = '~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.bed'
+params.gene_TSS   = '~/resources/genome/hg38_gencode_raw/gencode.v44.primary_assembly.annotation.tss.bed'
+params.chromsizes = '~/resources/genome/hg38.p14.chrom.sizes.fmtd'
+params.blacklist  = '~/resources/genome/hg38_gencode_raw/hg38-blacklist.v3.bed'
 
 // Inputs / outputs
 params.results   = '/gcgl/mmatos/cd4_aging_project/data/ATAC-seq/atac_preprocessing'
-params.data      = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/data/cd4_project_atac_fastqs/Project_LAP_15324_B01_NAN_Lane.2023-06-06/Sample_*/fastq/*.R{1,2}.fastq.gz'
-params.datatest  = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/data/cd4_project_atac_fastqs/Project_LAP_15324_B01_NAN_Lane.2023-06-06/Sample_T2612/fastq/*.fastq.gz'
+params.data      = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/data/cd4_project_atac_fastqs/Project_LAP_15324_B01_NAN_Lane.2023-06-06/Sample_*/fastq/*.R{1,2}.fastq.gz'
+params.datatest  = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/data/cd4_project_atac_fastqs/Project_LAP_15324_B01_NAN_Lane.2023-06-06/Sample_T2612/fastq/*.fastq.gz'
 
 // Assets / helper scripts
-params.adapter                   = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/assets/NexteraPE-PE.fa'
-params.varVCF                    = '/gcjm/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4p_WGS_pass_only.snps.maf1.WASP.vcf' // created with 001_preparing_wasp_vcf.sh
-params.bam_filter                = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/bamtools_filtering_script.json'
-params.bampe_rm_orphan           = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/nfcore_remove_orphans.py'
-params.macs2_merged_expand_script = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/macs2_merged_expand.py'
-params.plot_peak_intersect_script = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/plot_peak_intersect.R'
-params.peaks_script              = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/unique_peaks.py'
-params.custompeaks_script        = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/customPeakset.r'
-params.igv_script                = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/igv_files_to_session.py'
-params.pad_peaks_script          = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/pad_peaks.py'
+params.adapter                   = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/assets/NexteraPE-PE.fa'
+params.varVCF                    = '~/scRNAseq/sc_lib_preprocessing/resources/variant_vcf/CD4p_WGS_pass_only.snps.maf1.WASP.vcf' // created with 001_preparing_wasp_vcf.sh
+params.bam_filter                = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/bamtools_filtering_script.json'
+params.bampe_rm_orphan           = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/nfcore_remove_orphans.py'
+params.macs2_merged_expand_script = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/macs2_merged_expand.py'
+params.plot_peak_intersect_script = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/plot_peak_intersect.R'
+params.peaks_script              = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/unique_peaks.py'
+params.custompeaks_script        = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/customPeakset.r'
+params.igv_script                = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/igv_files_to_session.py'
+params.pad_peaks_script          = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/pad_peaks.py'
 
-params.rlibrary          = '/gcjm/R/x86_64-pc-linux-gnu-library'
-params.hommer_header     = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/assets/merged_library_peak_annotation_header.txt'
-params.hommer_plot_script = '/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/plot_homer_annotatepeaks.r'
+params.rlibrary          = '~/R/x86_64-pc-linux-gnu-library'
+params.hommer_header     = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/assets/merged_library_peak_annotation_header.txt'
+params.hommer_plot_script = '~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/plot_homer_annotatepeaks.r'
 
 // Precomputed outputs from upstream pipeline
 params.shifted_bams          = '/gcgl/mmatos/cd4_aging_project/data/ATAC-seq/atac_preprocessing/STAR/shifted_bams/*.bam'
@@ -306,7 +306,7 @@ process Deeptools_QC_Reference_2 {
 process PROCESS_MACS2_SUMMITS {
     tag "merged_library"
     publishDir "${params.results}/merged_library/peak_calling/MACS3/BAMPE/peaks_102024", mode: 'copy', pattern: "*.bed"
-    conda "/gcjm/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/python_env.yml"
+    conda "~/ATAC-seq_analysis/ATACseq_nf-preprocessing/scripts/bin/python_env.yml"
 
     input:
     path(narrow_peaks)

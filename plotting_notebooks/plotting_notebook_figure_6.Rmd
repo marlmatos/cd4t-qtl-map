@@ -4,7 +4,7 @@ author: "Marliette Matos"
 output: html_notebook
 ---
 
-```{r figure-6-A, message=FALSE, warning=FALSE, fig.width=8, fig.height=8}
+```{r figure-6-A, message=FALSE, warning=FALSE, fig.width=12, fig.height=12}
 
 source("config.local.R")
 
@@ -588,8 +588,6 @@ combined_plot <- cowplot::plot_grid(
 )
 
 # Display all three plot objects
-plot2
-plot3
 combined_plot
 
 
@@ -597,6 +595,92 @@ combined_plot
 ```
 
 
-```{r figure-6-B, message=FALSE, warning=FALSE, fig.width=8, fig.height=8}
+```{r figure-6-B, message=FALSE, warning=FALSE, fig.width=6, fig.height=4}
 
+## inspecting results
+library(data.table)
+library(dplyr)
+final_results<-fread("~/cd4_qtl_paper_figures/paper_reviews/reviews_round1/data/ChromBPNet_GWAS_CS_only_enrichment/GWAS_CS_only_correct_enrichment_results.csv")
+
+
+
+final_results<-final_results %>%
+  select(
+    category,
+    model_OR,
+    model_CI_low,
+    model_CI_high,
+    model_p_two_sided
+  ) %>%
+  print(width = Inf)
+
+# ======================================================================
+# 15) FOREST PLOT
+# ======================================================================
+
+plot_df <- final_results %>%
+  mutate(
+    category_label = recode(
+      category,
+      both = "eQTL + caQTL",
+      just_caqtl = "caQTL only",
+      just_eqtl = "eQTL only"
+    ),
+    
+    category_label = factor(
+      category_label,
+      levels = rev(
+        c(
+          "eQTL + caQTL",
+          "caQTL only",
+          "eQTL only"
+        )
+      )
+    )
+  )
+
+forest_plot <- ggplot(
+  plot_df,
+  aes(
+    x = model_OR,
+    y = category_label
+  )
+) +
+  geom_vline(
+    xintercept = 1,
+    linetype = "dashed",
+    linewidth = 0.6
+  ) +
+  geom_errorbarh(
+    aes(
+      xmin = model_CI_low,
+      xmax = model_CI_high
+    ),
+    height = 0,
+    linewidth = 0.7
+  ) +
+  geom_point(
+    size = 3
+  ) +
+  scale_x_log10(
+    breaks = log_breaks(
+      n = 6
+    ),
+    labels = label_number(
+      accuracy = 0.01
+    )
+  ) +
+  labs(
+    x = paste0(
+      "Odds ratio for ChromBPNet prioritization\n",
+      "among callable variants in GWAS credible sets"
+    ),
+    y = NULL
+  ) +
+  theme_classic(
+    base_size = 12
+  )
+
+print(forest_plot)
+print(plot_df)
 ```

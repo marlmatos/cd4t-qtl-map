@@ -1,7 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name=bcftools     # Job name
 #SBATCH --mail-type=END,FAIL          # Mail events (NONE, BEGIN, END, FAIL, ALL
-#SBATCH --mail-user=marliette.rodriguezmatos@einsteinmed.edu    
 #SBATCH -p pe2 
 #SBATCH -t 7-00:00:00
 #SBATCH --cpus-per-task=4                   
@@ -11,7 +10,7 @@
 module load bcftools/1.19
 
 data_dir='/gcgl/mmatos/cd4_aging_project/data/LowPass_WGS/03.27.24_SamGhatan_QC/ashkenazi_vcf'
-dir='/gchm/scRNAseq/sc_lib_preprocessing/resources/variant_vcf'
+dir='~/scRNAseq/sc_lib_preprocessing/resources/variant_vcf'
 
 # subset all chromosomes for just sample 30193 ( a random sample, what we want is just that column)
 

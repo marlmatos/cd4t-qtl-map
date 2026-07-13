@@ -4,10 +4,6 @@
 #SBATCH --mem=100G
 #SBATCH --gres=gpu
 #SBATCH --time=7-00:00:00                     # total run time limit (HH:MM:SS)
-#SBATCH --output=logs/variant_scores_standalone_%A_%a.log  # Standard output with array job ID
-#SBATCH --error=logs/variant_scores_standalone_%A_%a.err   # Error log with array job ID
-#SBATCH --mail-type=END,FAIL                # Mail events (NONE, BEGIN, END, FAIL, ALL)
-#SBATCH --mail-user=mmatos@nygenome.org     # Where to send mail
 #SBATCH --array=1-110%10  # 5 folds × 22 chromosomes = 110 total tasks, limit to 10 concurrent
 
 source /usr/share/lmod/lmod/init/bash
@@ -38,21 +34,20 @@ CHROM=${CHROMOSOMES[$CHROM_IDX]}
 echo "Processing fold: $FOLD_ID, chromosome: $CHROM"
 
 # Define paths based on fold
-HOME_DIR=/gchm
-OUTPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/perfold_perchrom/fold_${FOLD_ID}/
+OUTPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/variant_prediction_scores/perfold_perchrom/fold_${FOLD_ID}/
 mkdir -p $OUTPUT_DIR
 
-list=/gchm/cd4_chrombpnet/scripts/3.variant_scoring_TF_hits/input/converted_variants_inpeaks.tsv
-genome=$HOME_DIR/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa
-model=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/fold_${FOLD_ID}/models/chrombpnet.h5
-model_nobias=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/fold_${FOLD_ID}/models/chrombpnet_nobias.h5
-chromsizes=$HOME_DIR/cd4_chrombpnet/data/inputs/hg38.autosomes.chrom.sizes
-peaks=$HOME_DIR/cd4_chrombpnet/data/inputs/peaks/merged_cd4_samples_peaks_no_blacklist.sorted.bed
+list=$HOME/cd4_chrombpnet/scripts/3.variant_scoring_TF_hits/input/converted_variants_inpeaks.tsv
+genome=$HOME/resources/genome/hg38_gencode_PRI_align/GRCh38.primary_assembly_subset_masked.genome.fa
+model=$HOME/cd4_chrombpnet/chrombpnet_model_b7/fold_${FOLD_ID}/models/chrombpnet.h5
+model_nobias=$HOME/cd4_chrombpnet/chrombpnet_model_b7/fold_${FOLD_ID}/models/chrombpnet_nobias.h5
+chromsizes=$HOME/cd4_chrombpnet/data/inputs/hg38.autosomes.chrom.sizes
+peaks=$HOME/cd4_chrombpnet/data/inputs/peaks/merged_cd4_samples_peaks_no_blacklist.sorted.bed
 out_prefix=${OUTPUT_DIR}/cd4_tcells_AJ_common_variants
 
 MODIFIED_HELPERS_DIR="/gchm/packages/variant-scorer/src/"
 variant_scoring_py=/gchm/packages/variant-scorer/src/variant_scoring.per_chrom.py
-singularity_image=$HOME_DIR/packages/chrombpnet_latest.sif
+singularity_image=$HOME/packages/chrombpnet_latest.sif
 
 # Run variant scoring for specific fold and chromosome
 singularity exec --nv \
@@ -60,9 +55,9 @@ singularity exec --nv \
   --env MPLCONFIGDIR=/tmp \
   --env PYTHONPATH="$MODIFIED_HELPERS_DIR:$PYTHONPATH" \
   --no-home \
-  -B $HOME_DIR/packages \
-  -B $HOME_DIR/cd4_chrombpnet \
-  -B $HOME_DIR/resources \
+  -B $HOME/packages \
+  -B $HOME/cd4_chrombpnet \
+  -B $HOME/resources \
   -B /gchm/ \
   -B $OUTPUT_DIR \
   $singularity_image python $variant_scoring_py \

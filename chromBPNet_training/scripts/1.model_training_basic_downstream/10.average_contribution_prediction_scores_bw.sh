@@ -3,10 +3,7 @@
 #SBATCH --partition=cpu                     # Partition Name
 #SBATCH --mem=60G
 #SBATCH --time=7-00:00:00                     # total run time limit (HH:MM:SS)
-#SBATCH --output=logs/average_prediction_scores_%A_%a.log  # Standard output with array job ID
-#SBATCH --error=logs/average_prediction_scores_%A_%a.err   # Error log with array job ID
-#SBATCH --mail-type=END,FAIL                # Mail events (NONE, BEGIN, END, FAIL, ALL)
-#SBATCH --mail-user=mmatos@nygenome.org     # Where to send mail
+
 
 # Summary: This script averages the prediction scores and contribution scores across the 5 folds of the ChromBPNet model.
 
@@ -16,16 +13,14 @@
 # Activate wiggletools environment
 source activate wiggletools
 module load deeptools
-# full home path
-HOME_DIR=/gchm
 
 # directories
-CONTRIB_INPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/contribution_scores_bw
-CONTRIB_OUTPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/contribution_scores_bw/averaged
+CONTRIB_INPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/contribution_scores_bw
+CONTRIB_OUTPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/contribution_scores_bw/averaged
 
-PRED_INPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/prediction_scores_bw
-PRED_OUTPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/prediction_scores_bw/averaged
-chromsizes=$HOME_DIR/cd4_chrombpnet/data/inputs/hg38.autosomes.chrom.sizes
+PRED_INPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/prediction_scores_bw
+PRED_OUTPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/prediction_scores_bw/averaged
+chromsizes=$HOME/cd4_chrombpnet/data/inputs/hg38.autosomes.chrom.sizes
 
 # Create output directories if they don't exist
 mkdir -p $CONTRIB_OUTPUT_DIR

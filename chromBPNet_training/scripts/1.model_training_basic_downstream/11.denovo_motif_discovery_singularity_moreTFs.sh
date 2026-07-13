@@ -4,30 +4,25 @@
 #SBATCH --mem=100G
 #SBATCH --time=7-00:00:00                     # total run time limit (HH:MM:SS)
 #SBATCH -c 10
-#SBATCH --output=logs/tfmodisco_%A.log  # Standard output with array job ID
-#SBATCH --error=logs/tfmodisco_%A.err   # Error log with array job ID
-#SBATCH --mail-type=END,FAIL                # Mail events (NONE, BEGIN, END, FAIL, ALL)
-#SBATCH --mail-user=mmatos@nygenome.org     # Where to send mail
+
 
 #please note that tfmodisco within chrombpnet will be deprecated. The reason I used the version within the singularity image is that I was having some dependency issue with numpy
 
 source /usr/share/lmod/lmod/init/bash
 
-#full home path
-HOME_DIR=/gchm
 
 #the singularity image path
-singularity_image=$HOME_DIR/packages/chrombpnet_latest.sif  # Adjust this path to where your image is stored
+singularity_image=$HOME/packages/chrombpnet_latest.sif  # Adjust this path to where your image is stored
 # Set Numba to use 4 threads
 export NUMBA_NUM_THREADS=8
 
 
 #output directory first so we can use it for other path definitions
-OUTPUT_DIR=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/model
+OUTPUT_DIR=$HOME/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/model
 OUTPUT=$OUTPUT_DIR/tfmodisco_motifs_count_contributions.h5 
-contribution_scores=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/contribution_scores_bw/averaged/averaged_folds_cd4_tcells.counts_scores.h5
-model_nobias=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/fold_${FOLD_ID}/models/chrombpnet_nobias.h5
-meme=$HOME_DIR/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/motifs_database/combined_JASPAR_2022_HOCOMOCOv11_cisbp200.meme
+contribution_scores=$HOME/cd4_chrombpnet/chrombpnet_model_b7/contribution_scores_bw/averaged/averaged_folds_cd4_tcells.counts_scores.h5
+model_nobias=$HOME/cd4_chrombpnet/chrombpnet_model_b7/fold_${FOLD_ID}/models/chrombpnet_nobias.h5
+meme=$HOME/cd4_chrombpnet/chrombpnet_model_b7/tfmodisco_motifs_hocomoco_jaspar_cisbp/motifs_database/combined_JASPAR_2022_HOCOMOCOv11_cisbp200.meme
 # Create output directory
 mkdir -p $OUTPUT_DIR/report/
 
@@ -47,8 +42,8 @@ singularity exec --nv \
   --env PYTHONNOUSERSITE=1 \
   --env MPLCONFIGDIR=/tmp \
   --no-home \
-  -B $HOME_DIR/packages \
-  -B $HOME_DIR/cd4_chrombpnet \
+  -B $HOME/packages \
+  -B $HOME/cd4_chrombpnet \
   $singularity_image modisco motifs \
   -i "$contribution_scores" \
   -n 1000000 \
@@ -61,6 +56,6 @@ singularity exec --nv \
   --env PYTHONNOUSERSITE=1 \
   --env MPLCONFIGDIR=/tmp \
   --no-home \
-  -B $HOME_DIR/packages \
-  -B $HOME_DIR/cd4_chrombpnet \
+  -B $HOME/packages \
+  -B $HOME/cd4_chrombpnet \
   $singularity_image modisco report -i $OUTPUT -o report/ -s report/ -m $meme
