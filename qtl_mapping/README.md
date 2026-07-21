@@ -34,13 +34,11 @@ Each `.R`/`.py` script has a matching `.sh` SLURM submission wrapper.
 Numbered pipeline (run in order) mapping cis-eQTLs from scRNA-seq pseudobulk with tensorQTL:
 1. `001_preparing_seurat_obj_for_QTL` — subset Seurat object to CD4+ cells
 2. `002_GetPseudobulk_whole` — compute per-sample pseudobulk expression
-3. `003_IdentifyPCs` — PCA on expression (requires `NormalizePseudobulk.R` in this directory — not yet committed, see below)
+3. `003_IdentifyPCs` — PCA on expression (uses `NormalizePseudobulk.R` in this directory)
 4. `004_ProcessExpression` — format expression input for tensorQTL
 5. `005_PreparecovsFile` / `005_PreparecovsFile_ncells` — build covariates file(s)
 6. `006_ReFiltering_genotypes` — re-filter genotypes for this cohort
 7. `007_split_plinkfiles_by_chr` — split PLINK files by chromosome
 8. `008_ciseQTLTensor_allcells` — run cis-eQTL mapping (±1Mb window, MAF>5%, read-depth covariate)
 
-`plotting_pcs.ipynb` and `003_common_samples_gfgex_wgs.csv` are supporting QC/metadata files.
-
-**Note:** `003_IdentifyPCs.R` sources `NormalizePseudobulk.R`, a pseudobulk-normalization utility that has not yet been added to this directory — add it at `qtl_mapping/eqtl_mapping/NormalizePseudobulk.R` before running this step.
+`NormalizePseudobulk.R` (sourced by `003_IdentifyPCs.R`), `plotting_pcs.ipynb`, and `003_common_samples_gfgex_wgs.csv` are supporting utility/QC/metadata files.
