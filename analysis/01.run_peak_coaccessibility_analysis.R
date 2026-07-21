@@ -3,7 +3,7 @@
 # author: Marliette Matos
 # ============================================================
 
-source("cd4t-qtl-map/cd4_qtl_paper_figures/paths_config.R")
+source("~/cd4t-qtl-map/analysis/paths_config.R")
 
 .libPaths(fig1_paths$r_env)
 library(dplyr)

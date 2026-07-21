@@ -1,0 +1,11 @@
+# paths_config.R.example
+#
+# Copy this file to `paths_config.R` (same directory) and fill in your own
+# absolute paths. `paths_config.R` is intentionally gitignored (see
+# .gitignore: `*/paths_config.R`) because it points at cluster-specific data
+# locations — it should never be committed.
+
+script2 <- list(
+  bam_dir      = "/path/to/atac_preprocessing/STAR/filtered_bams",
+  samples_file = "/path/to/atac_high_read_depth_samples.txt"
+)

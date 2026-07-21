@@ -20,9 +20,24 @@ cd4t-qtl-map/
 ├── preprocessing/          # Data preprocessing pipelines
 │   ├── ATAC-seq/          # Bulk ATAC-seq processing (Nextflow)
 │   └── scRNA-seq/         # Single-cell RNA-seq processing (Nextflow + STARsolo)
-├── qtl_mapping/           # QTL analysis workflows
-├── chromBPNet_training/   # chromBPNet model training and prediction
-├── cd4_qtl_paper_figures/ # Scripts for manuscript figure generation
+├── qtl_mapping/           # caQTL / eQTL mapping workflows (tensorQTL) + genotype prep
+│   ├── genotypes/         # VCF QC, allele splitting, PC filtering
+│   ├── caqtl_mapping/     # ATAC-seq peak caQTL mapping
+│   └── eqtl_mapping/      # scRNA-seq pseudobulk eQTL mapping
+├── cellregmap/             # CellRegMap GxC interaction eQTL mapping
+│   ├── 01.preprocessing/  # Metacells, pseudobulk, MOFA phenotype prep
+│   └── 02.interaction_mapping/ # CellRegMap interaction testing + FDR summarization
+├── chromBPNet_training/    # chromBPNet model training and variant scoring
+│   └── scripts/
+│       ├── 1.model_training_basic_downstream/ # Peak calling → model training → contribution scores
+│       ├── 2.denovo_TF_discovery/              # De novo motif discovery (TF-MoDISco)
+│       ├── 3.variant_scoring_TF_hits/          # Variant effect prediction + SHAP contribution scores
+│       ├── 4.TF_disruption_scores/             # TF motif hit calling on variants
+│       └── utils/                              # Locus/track plotting helpers
+├── analysis/                # Downstream integrative analyses (fine-mapping, post-colocalization integration,
+│                             # Findr causal inference, ChromBPNet/motif enrichments)
+├── plotting_notebooks/      # Main manuscript figure notebooks (Figures 1–6)
+├── supplements_figures/     # Supplementary figure notebooks and QC plots
 └── LICENSE
 ```
 
@@ -44,13 +59,26 @@ cd4t-qtl-map/
 - **Genotype-aware analysis**: WASP integration for allele-specific mapping
 
 ### 📊 Pan CD4+ T cell QTL Mapping
-- Integration of chromatin accessibility and gene expression QTLs
+- Genotype QC and preparation, caQTL mapping (ATAC-seq peaks), and eQTL mapping (scRNA-seq pseudobulk) with tensorQTL
+
+    See [`qtl_mapping/README.md`](qtl_mapping/README.md) for details.
+- Single-cell gene-by-context (GxC) interaction eQTL mapping with CellRegMap
+
+    See [`cellregmap/README.md`](cellregmap/README.md) for details.
+- Integration of chromatin accessibility and gene expression QTLs, fine-mapping, and colocalization
 - Analysis of immune-related GWAS loci
 - Multi-modal regulatory architecture inference
 
+    See [`analysis/README.md`](analysis/README.md) for details.
+
 ### 🤖 Predictive Modeling
 - chromBPNet training for regulatory element prediction in CD4+ T cells
-- Model interpretation and variant effect prediction
+- Model interpretation, variant effect prediction, and de novo TF motif discovery
+
+    See [`chromBPNet_training/README.md`](chromBPNet_training/README.md) for details.
+
+### 📈 Figure Generation
+- Main manuscript figures ([`plotting_notebooks/`](plotting_notebooks/README.md)) and supplementary figures ([`supplements_figures/`](supplements_figures/README.md))
 
 ### 🤖 GWAS colocalization
 

@@ -20,19 +20,26 @@ In other words, **pt2 is not optional** in the WASP-aware workflow: it is the st
 <h2>Directory structure</h2>
 <pre><code>scRNAseq/
 ├── assets/
-│   └── Static resources used by the pipeline (e.g., whitelist copies, docs)
+│   └── Static resources used by the pipeline (e.g., barcode whitelist)
 ├── bin/
 │   └── Helper scripts called by Nextflow processes (Python/R; executable)
-├── conf/
-│   └── Nextflow profiles (HPC executor settings, containers/modules, resources)
-├── main.groovy
+├── scRNAseq_preprocessing.groovy
 │   └── pt1: STARsolo (+ WASP tags) alignment/quantification outputs
-├── main_merged_library.groovy
+├── scRNAseq_preprocessing2.groovy
 │   └── pt2: WASP-filter BAMs → rebuild matrices → downstream steps
 ├── nextflow.config
 │   └── Global Nextflow configuration + profiles + container/module settings
 ├── nextflow_scrnaseq_STAR.sh
-│   └── Wrapper to run pt1, pt2 with correct profile/params
+│   └── SLURM wrapper (currently configured to run pt2; edit the `nextflow run`
+│       target to switch between pt1/pt2)
+├── 001_download_hg38.sh / 002_prepare_fasta.sh
+│   └── Reference genome download/prep
+├── 001_renaming_fastq.sh / 001_renaming_fastqs.py
+│   └── Standardize raw FASTQ filenames before running pt1
+├── 001_preparing_wasp_vcf.sh
+│   └── Build the WASP VCF used for STAR-WASP allele-aware alignment (main script)
+└── 002_preparing_demultiplexing_vcf.sh
+    └── Build the multi-sample donor VCF used for demultiplexing/correlation
 </code></pre>
 
 
@@ -86,20 +93,17 @@ Key outputs (per library):
 ## Required files
 
 ### Core pipeline files
-- `main.groovy` (pt1)
-- `main_merged_library.groovy` (pt2)
+- `scRNAseq_preprocessing.groovy` (pt1)
+- `scRNAseq_preprocessing2.groovy` (pt2)
 - `nextflow.config`
-- `conf/` (profiles/executor/container configuration)
-- `run_nextflow_scrnaseq_pt1.sh`
-- `run_nextflow_scrnaseq_pt2.sh`
+- `nextflow_scrnaseq_STAR.sh`
 
-### Helper scripts (recommended in `bin/`)
+### Helper scripts (in `bin/`)
 Used to rebuild matrices / demultiplex / assign clusters:
-- `soloCOUNTmatrixFromBam.py`
-- `header_matrix.py`
-- `batch_txt_script.r`
-- `Assign_Indiv_by_Geno.R` (or equivalent; used in genotype–cluster correlation)
-- (optional) any additional correlation script invoked by pt2
+- `soloCOUNTmatrixFromBam.py` — rebuild the count matrix from WASP-filtered alignments
+- `header_matrix.py` — write matrix headers
+- `batch_txt_script.r` — batch helper for demultiplexing
+- `demulti_corr.r` — genotype–cluster correlation (donor assignment)
 
 ### Required reference resources (passed via `params.*`)
 - Genome: `fasta`, `fai`, `gtf`, `STAR_index/`

@@ -1,0 +1,123 @@
+# config.local.R.example
+#
+# Copy this file to `config.local.R` (same directory) and fill in your own
+# absolute paths. `config.local.R` is intentionally gitignored (see
+# .gitignore: `*/config.local.R`) because it points at cluster-specific data
+# locations — it should never be committed. Each `plotting_notebook_figure_*.Rmd`
+# starts with `source("config.local.R")` and expects the objects below to exist.
+#
+# All entries are file/directory path strings unless noted otherwise.
+
+# R library path used by .libPaths() at the top of every notebook.
+r_lib_path_44 <- "~/R/x86_64-pc-linux-gnu-library/4.4"
+
+# ---------------------------------------------------------------------------
+# Figure 1
+# ---------------------------------------------------------------------------
+paths_figure1 <- list(
+  color_pallete_helper         = "analysis/utils/color_pallete_helper.R",
+  summary_df                   = "/path/to/eqtl_caqtl_finemapping_coloc_all.tsv",
+  summary_path                 = "/path/to/figure1/data",
+  caqtl_credible_sets_template = "/path/to/caqtl_credible_sets_chr{chr}.tsv",
+  eqtl_credible_sets_template  = "/path/to/eqtl_credible_sets_chr{chr}.tsv",
+  caqtl_categories_pct         = "/path/to/caqtl_categories_pct.csv",
+  chromatin_state_bed          = "/path/to/ENCODE_chromatin_state.bed",
+  gencode_bed_path             = "/path/to/gencode.bed",
+  peak_path                    = "/path/to/processed_peaks.bed"
+)
+
+# ---------------------------------------------------------------------------
+# Figure 2 (assigned to `paths` at the top of the notebook)
+# ---------------------------------------------------------------------------
+paths_figure2 <- list(
+  plot_dir           = "/path/to/figure2/plots",
+  pseudocell_file    = "/path/to/pseudocells.h5ad",
+  mofa_file          = "/path/to/mofa_model.hdf5",
+  model_file         = "/path/to/mofa_model.hdf5",
+  dynamic_int        = "/path/to/dynamic_interactions.tsv",
+  dynamic_plot_dir   = "/path/to/figure2/plots/dynamic",
+  dynamic_mofa_helper = "analysis/utils/dynamic_mofa_plot_beta_helper.R",
+  qtl_violin_helper  = "analysis/utils/qtl_violion_helper.R"
+)
+
+# ---------------------------------------------------------------------------
+# Figure 3 (used directly as paths_figure3$...)
+# ---------------------------------------------------------------------------
+paths_figure3 <- list(
+  work_dir                    = "/path/to/figure3",
+  all_res_not_filtered_tsv    = "/path/to/findr_MEDIATION_All_results_collapsed_not_filtered.tsv",
+  inputs_tsv                  = "/path/to/findr_inputs.tsv",
+  combined_finemapping_annotated = "/path/to/CD4T_combined_finemapping_annotated.csv",
+  peak_coords_bed             = "/path/to/peak_coords.bed",
+  processed_peaks_bed         = "/path/to/processed_peaks.bed",
+  relpos_enrich_csv           = "/path/to/findr_mediation_relative_pos_locus_enrich.csv",
+  relpos_pdf                  = "/path/to/glm_test_model_vs_rel_peak_position.pdf",
+  caqtl_enrich_csv            = "/path/to/findr_mediation_caqtl_category_locus_enrich.csv",
+  caqtl_pdf                   = "/path/to/glm_test_model_vs_caqtl_category.pdf",
+  upset_credible_sets_rds     = "/path/to/upset_credible_sets.rds",
+  chrombpnet_locus_pdf        = "/path/to/glm_locus_enrich_model_vs_cbpnet.pdf",
+  gtf_path                    = "/path/to/gencode.gtf",
+  references_dir              = "/path/to/references",
+  bigwig_dir                  = "/path/to/bigwigs",
+  causality_track_examples_dir = "/path/to/figure3/track_examples",
+  metadata_csv                = "/path/to/sample_metadata.csv",
+  coloc_csv_tpl                = "/path/to/coloc_chr{chr}.csv",
+  all_res_tsv                  = "/path/to/all_results.tsv",
+  filtered_peaks                = "/path/to/filtered_peaks.bed",
+  dec                            = "/path/to/decision_table.csv",
+  qtl_violin_helper           = "analysis/utils/qtl_violion_helper.R",
+  track_plots_helper           = "analysis/utils/track_plots_helpers.R"
+)
+
+# ---------------------------------------------------------------------------
+# Figure 4
+# ---------------------------------------------------------------------------
+paths_figure4 <- list(
+  summary_path            = "/path/to/figure4/data",
+  chrombpnet_variant_path = "/path/to/chrombpnet_variant_scores.tsv",
+  motif_path               = "/path/to/motif_hits.tsv",
+  all_variants_path        = "/path/to/all_variants.tsv",
+  maf_path                  = "/path/to/maf.tsv",
+  cre_annotation_path      = "/path/to/cre_annotations.tsv"
+)
+
+# ---------------------------------------------------------------------------
+# Figure 5 (assigned to `paths` at the top of the notebook)
+# ---------------------------------------------------------------------------
+paths_figure5 <- list(
+  r_libs                        = r_lib_path_44,
+  color_pallete_helper           = "analysis/utils/color_pallete_helper.R",
+  track_plots_helper             = "analysis/utils/track_plots_helpers.R",
+  cbpnet_extract_helper           = "analysis/utils/cbpnet_extract_allelic_contrib_plus_atrr_bigwigs_v2.R",
+  dynamic_mofa_helper             = "analysis/utils/dynamic_mofa_plot_beta_helper.R",
+  qtl_violin_helper               = "analysis/utils/qtl_violion_helper.R",
+  summary_df                      = "/path/to/eqtl_caqtl_finemapping_coloc_all.tsv",
+  filtered_variant_hits           = "/path/to/filtered_variant_hits.tsv",
+  motif_hits_summary_annotations  = "/path/to/motif_hits_summary_annotations.csv",
+  motif_family_summary_table      = "/path/to/TF_motif_family_promoter_enrich_fisher_results.tsv",
+  var_pred                        = "/path/to/variant_prediction_scores.tsv",
+  motifs_tsv                      = "/path/to/modisco_motids.tsv",
+  promoter_enrich                 = "/path/to/promoter_enrich_results.tsv",
+  variant_prediction_scores_ips  = "/path/to/variant_prediction_scores_ips.tsv",
+  metadata                        = "/path/to/sample_metadata.csv",
+  example_table                   = "/path/to/example_table.csv",
+  references_dir                  = "/path/to/references",
+  dynamic_int                     = "/path/to/dynamic_interactions.tsv",
+  dynamic_output_dir              = "/path/to/figure5/plots/dynamic",
+  output_dir                      = "/path/to/figure5/plots",
+  bigwig_dir                      = "/path/to/bigwigs",
+  bw_path                         = "/path/to/attribution.bw",
+  chrom_sizes                     = "/path/to/chrom.sizes",
+  dir                              = "/path/to/figure5/data",
+  data_h                           = "/path/to/contribution_scores.h5",
+  atrr                             = "/path/to/attribution_scores",
+  tsv                              = "/path/to/variant_table.tsv"
+)
+
+# ---------------------------------------------------------------------------
+# Figure 6 (assigned to `paths` at the top of the notebook)
+# ---------------------------------------------------------------------------
+paths_figure6 <- list(
+  output_dir         = "/path/to/figure6/plots",
+  trait_locus_master = "/path/to/GWAS_CS_only_correct_enrichment_results.csv"
+)

@@ -13,7 +13,7 @@ library(rlang)
 library(cowplot)
 library(tidyr)
 
-source("~/cd4_qtl_paper_figures/utils/color_pallete_helper.R")
+source("~/cd4t-qtl-map/analysis/utils/color_pallete_helper.R")
 
 #read finemapping QTL results
 summary_df<-read_delim("~/cd4_qtl_paper_figures/figure_1/data/eqtl_caqtl_finemapping_coloc_all.tsv")
