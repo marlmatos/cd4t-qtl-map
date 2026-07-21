@@ -21,6 +21,8 @@
 # ============================================================
 
 
+source("~/cd4t-qtl-map/analysis/paths_config.R")
+
 .libPaths(fig1_paths$r_env)
 
 library(ggplot2)

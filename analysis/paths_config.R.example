@@ -1,0 +1,69 @@
+# paths_config.R.example
+#
+# Copy this file to `paths_config.R` (same directory) and fill in your own
+# absolute paths. `paths_config.R` is intentionally gitignored (see
+# .gitignore: `*/paths_config.R`) because it points at cluster-specific data
+# locations — it should never be committed. Scripts 01, 02, and 03 source
+# this file and expect `fig1_paths`; scripts 11, 12, and 13 expect
+# `script11`, `script12`, `script13` respectively.
+#
+# All entries are file/directory path strings unless noted otherwise.
+
+# ---------------------------------------------------------------------------
+# Used by 01.run_peak_coaccessibility_analysis.R,
+#         02.merging_finemapping_caqtl_eqtl_coloc_res.R,
+#         03.chromatin_tss_informed_epi_annotations.R
+# ---------------------------------------------------------------------------
+fig1_paths <- list(
+  r_env                             = "~/R/x86_64-pc-linux-gnu-library/4.4",
+  finemapping_dir                   = "/path/to/finemapping",
+  peak_coords_file                  = "/path/to/peak_coords.tsv",
+  correlation_results_file          = "/path/to/peak_coaccessibility_correlations.tsv",
+  helper_functions_file              = "analysis/helper_functions.R",
+  coloc_files                       = "/path/to/coloc_results/*.tsv",
+  eqtl_finemapping_files            = "/path/to/eqtl_finemapping/*.tsv",
+  caqtl_finemapping_files           = "/path/to/caqtl_finemapping/*.tsv",
+  peak_count_path                   = "/path/to/peak_counts.tsv",
+  out                                = "/path/to/output_dir",          # NB: used as fig1_paths$out.dir (list$out concatenated with ".dir")
+  eqtl_caqtl_finemapping_coloc_all_file = "/path/to/eqtl_caqtl_finemapping_coloc_all.tsv",
+  eqtl_caqtl_coloc_allchrs_file     = "/path/to/eqtl_caqtl_coloc_allchrs.tsv",
+  peaks_names_file                  = "/path/to/peak_names.txt",
+  gencode_file                      = "/path/to/gencode.gtf",
+  peak_annotation_file              = "/path/to/peak_annotation.rds",
+  peak_annotation_no_window_file    = "/path/to/peak_annotation_no_window.rds",
+  chrombpnet_motifs_file            = "/path/to/chrombpnet_motifs.bed"
+)
+
+# ---------------------------------------------------------------------------
+# Used by 11.chrombpnet_var_liftover_hg38_to_hg19.R
+# ---------------------------------------------------------------------------
+script11 <- list(
+  dbsnp38_dir = "/path/to/dbsnp/hg38",
+  dbsnp37_dir = "/path/to/dbsnp/hg19"
+)
+
+# ---------------------------------------------------------------------------
+# Used by 12.creating_summary_gwas_chrombpnet_coloc.R
+# ---------------------------------------------------------------------------
+script12 <- list(
+  data.dir         = "/path/to/coloc_results_root",   # contains coloc_results/ and preprocessed_folder_names.txt
+  chrombpnet_file  = "/path/to/chrombpnet_prioritized_variants.tsv",
+  eqtl_cs_dir      = "/path/to/eqtl_credible_sets",
+  caqtl_cs_dir     = "/path/to/caqtl_credible_sets",
+  gwas_fm_dir      = "/path/to/gwas_finemapping/output/nathan_completed", # SuSiE .rds files
+  output_dir       = "/path/to/figure_outputs",
+  output_file      = "/path/to/summary_table_8.tsv",
+  plot_output_file = "/path/to/gwas_chrombpnet_coloc_summary.pdf"
+)
+
+# ---------------------------------------------------------------------------
+# Used by 13.cbpnet_enrich_gwas_coloc_v2.R
+# ---------------------------------------------------------------------------
+script13 <- list(
+  data_dir                = "/path/to/coloc_results_root",
+  gwas_fm_dir              = "/path/to/gwas_finemapping/output/nathan_completed",
+  chrombpnet_score_file   = "/path/to/chrombpnet_variant_scores.tsv",
+  chrombpnet_mapping_file = "/path/to/chrombpnet_variant_id_mapping.tsv",
+  eqtl_cs_dir              = "/path/to/eqtl_credible_sets",
+  caqtl_cs_dir             = "/path/to/caqtl_credible_sets"
+)

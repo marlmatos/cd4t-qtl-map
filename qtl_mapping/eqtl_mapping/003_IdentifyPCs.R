@@ -23,7 +23,7 @@ library(dplyr)
 library(lubridate)
 library(chron)
 # library(moments)
-source("~/cd4_QTL_analysis/02_Gene_expression//NormalizePseudobulk.R")
+source("~/cd4t-qtl-map/qtl_mapping/eqtl_mapping/NormalizePseudobulk.R")
 
 set.seed(2022)
 

@@ -17,8 +17,8 @@ library(fs)
 library(scales)
 library(data.table)
 options(bitmapType = "cairo")
-source("~/cd4_qtl_paper_figures/utils/metadata_helpers.R")
-source("~/cd4_qtl_paper_figures/utils/color_pallete_helper.R")
+source("~/cd4t-qtl-map/analysis/utils/metadata_helpers.R")
+source("~/cd4t-qtl-map/analysis/utils/color_pallete_helper.R")
 ```
 
 

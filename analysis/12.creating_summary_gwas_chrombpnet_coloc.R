@@ -108,7 +108,7 @@ suppressPackageStartupMessages({
 ## ======================================================================
 ## 0) CONFIGURATION: EDIT THESE PATHS
 ## ======================================================================
-source("~/cd4_qtl_paper_figures/utils/color_pallete_helper.R")
+source("~/cd4t-qtl-map/analysis/utils/color_pallete_helper.R")
 source("~/cd4t-qtl-map/analysis/paths_config.R")
 
 ## Base data directory containing coloc_results/ and preprocessed_folder_names.txt
@@ -178,7 +178,7 @@ KEY_STUDY <- c("gwas_id", "trait", "region", "cs_index", "region_cs")
 KEY_LOCUS <- c("trait", "region", "cs_index", "region_cs")
 KEY_QTL   <- c("qtl_type", "feature", "qtl_region", "qtl_cs_index")
 
-source("~/cd4_qtl_paper_figures/utils/color_pallete_helper.R")
+source("~/cd4t-qtl-map/analysis/utils/color_pallete_helper.R")
 
 label_trait <- function(x) dplyr::recode(x, !!!trait_labels, .default = x)
 

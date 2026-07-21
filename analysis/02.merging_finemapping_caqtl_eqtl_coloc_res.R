@@ -23,6 +23,8 @@
 # ============================================================
 
 
+source("~/cd4t-qtl-map/analysis/paths_config.R")
+
 .libPaths(fig1_paths$r_env)
 library(dplyr)
 library(readr)
