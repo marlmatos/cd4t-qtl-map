@@ -27,6 +27,7 @@ cd4t-qtl-map/
 ├── cellregmap/             # CellRegMap GxC interaction eQTL mapping
 │   ├── 01.preprocessing/  # Metacells, pseudobulk, MOFA phenotype prep
 │   └── 02.interaction_mapping/ # CellRegMap interaction testing + FDR summarization
+├── qtl_finemapping_coloc/  # SuSiE fine-mapping + colocalization (eQTL-caQTL, QTL-GWAS)
 ├── chromBPNet_training/    # chromBPNet model training and variant scoring
 │   └── scripts/
 │       ├── 1.model_training_basic_downstream/ # Peak calling → model training → contribution scores
@@ -65,8 +66,10 @@ cd4t-qtl-map/
 - Single-cell gene-by-context (GxC) interaction eQTL mapping with CellRegMap
 
     See [`cellregmap/README.md`](cellregmap/README.md) for details.
-- Integration of chromatin accessibility and gene expression QTLs, fine-mapping, and colocalization
-- Analysis of immune-related GWAS loci
+- SuSiE fine-mapping of caQTL and eQTL signals, and colocalization (eQTL-caQTL, and each QTL type vs. immune-related GWAS)
+
+    See [`qtl_finemapping_coloc/README.md`](qtl_finemapping_coloc/README.md) for details.
+- Integration of fine-mapping and colocalization results across modalities
 - Multi-modal regulatory architecture inference
 
     See [`analysis/README.md`](analysis/README.md) for details.
