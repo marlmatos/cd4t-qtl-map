@@ -42,3 +42,5 @@ Numbered pipeline (run in order) mapping cis-eQTLs from scRNA-seq pseudobulk wit
 8. `008_ciseQTLTensor_allcells` — run cis-eQTL mapping (±1Mb window, MAF>5%, read-depth covariate)
 
 `NormalizePseudobulk.R` (sourced by `003_IdentifyPCs.R`), `plotting_pcs.ipynb`, and `003_common_samples_gfgex_wgs.csv` are supporting utility/QC/metadata files.
+
+**Note on `003_common_samples_gfgex_wgs.csv`:** this file lists the de-identified study codes (`FIID`, `IID`) of individuals present in both the gene-expression and whole-genome genotype datasets, before final QC filtering (the final cohort in the paper has 362 individuals). The codes are anonymized study identifiers, not personal identifiers, and no names, dates of birth, or other direct identifiers are included in this repository.
