@@ -2704,3 +2704,256 @@ message(
   "Combined plot: ",
   plot_output_file
 )
+
+
+
+
+
+## ======================================================================
+## Supplementary Table 6: List of GWAS studies used for colocalization
+##
+## Study universe = gwas_cs_study$gwas_id, i.e. the exact studies that
+## contributed >=1 converged GWAS credible set. This is the same object that
+## defines trait_locus_master (study_ids / n_studies_at_locus) and the
+## GWAS_studies_at_locus / GWAS_studies_supporting_colocalization columns
+## of Supplementary Table 8, so the numbers reconcile by construction.
+## No trait filtering. Nothing is subset by a trait list.
+
+## Optional abbreviation -> full name. Only fills `Trait`; never removes a
+## study. Unlisted abbreviations fall back to the abbreviation.
+trait_full_names <- c(
+  "mono-count"   = "Monocyte Count",
+  "lymph-count"  = "Lymphocyte Count",
+  "eos-count"    = "Eosinophils Count",
+  "IBD"          = "Inflammatory Bowel Disease",
+  "AITD"         = "Autoimmune Thyroid Disease",
+  "AST"          = "Asthma",
+  "neutro-count" = "Neutrophil Count",
+  "myeloid-count"= "Myeloid Count",
+  "RA"           = "Rheumatoid Arthritis",
+  "T1D"          = "Type 1 Diabetes",
+  "SLE"          = "Systemic Lupus Erythematosus",
+  "eos-pct"      = "Eosinophil %",
+  "mono-pct"     = "Monocyte %",
+  "lymph-pct"    = "Lymphocyte %",
+  "CD"           = "Crohn's Disease",
+  "neutro-pct"   = "Neutrophil %",
+  "UC"           = "Ulcerative Colitis",
+  "baso-count"   = "Basophil Count",
+  "MS"           = "Multiple Sclerosis",
+  "PSO"          = "Psoriasis",
+  "AT"           = "Alergic Disease",
+  "PDAST"        = "Pediatric Asthma",
+  "VIT"          = "Vitiligo",
+  "baso-pct"     = "Basophil %",
+  "SS"           = "Systemic Sclerosis",
+  "GD"           = "Graves’ Disease",
+  "AD"           = "Contact Dermatitis",
+  "PBC"          = "Primary Biliary Cirrhosis",
+  "SD"           = "Sjögren's syndrome",
+  "ECZ"          = "Eczema",
+  "ADD"          = "Addison’s Disease",
+  "MN"           = "Membranous Nephropathy",
+  "MG"           = "Myasthenia Gravis",
+  "HT"           = "Hashimoto’s Thyroiditis",
+  "IL27"         = "IL27 Measurement",
+  "JIA"          = "Juvenile Idiopathic Arthritis",
+  "PV"           = "Psoriasis Vulgaris",
+  "TNFR2"        = "TNFR2 Levels",
+  "proIL16"      = "Pro-IL16 Measurement",
+  "IL1"          = "IL1R antagonist Measurement",
+  "SIGD"         = "Selective IgA Deficiency",
+  "PSC"          = "Primary Sclerosing Cholangitis",
+  "TNFR1"        = "TNFR1 Levels",
+  "CCL4"         = "CCL4 Chemokine Measurement",
+  "IL6"          = "IL6 Measurement",
+  "LADA"="Latent Autoimmune Diabetes",
+  "MCSF"="Macrophage Colony Stimulating Factor Measurement",
+  "IL18"="IL18 Measurement",
+  "CXCL1"="CXCL1 Measurement",
+  "IGN"="IgA Nephropathy",
+  "TNF"="TNF-related Apoptosis-inducing Ligand Measurement",
+  "AS"="Ankylosing spondylitis"
+  
+  
+)
+
+
+
+studies_used <- sort(unique(gwas_cs_study$gwas_id))
+
+s6_pieces <- strsplit(sub("_preprocessed$", "", studies_used), "_", fixed = TRUE)
+s6_get <- function(i) vapply(s6_pieces, function(p) if (length(p) >= i) p[i] else NA_character_, character(1))
+
+supp_table6 <- data.frame(
+  gwas_id     = studies_used,
+  Year        = suppressWarnings(as.integer(s6_get(1))),
+  PMID        = s6_get(2),
+  Trait_Abbrv = s6_get(3),
+  Ethnicity   = vapply(s6_pieces, function(p)
+    if (length(p) >= 4) paste(p[4:length(p)], collapse = "_") else NA_character_, character(1)),
+  stringsAsFactors = FALSE
+)
+supp_table6$Trait <- unname(trait_full_names[supp_table6$Trait_Abbrv])
+s6_noname <- is.na(supp_table6$Trait)
+supp_table6$Trait[s6_noname] <- supp_table6$Trait_Abbrv[s6_noname]
+supp_table6 <- supp_table6 %>% arrange(Year, PMID, gwas_id)
+
+stopifnot(!anyDuplicated(supp_table6$gwas_id))
+
+## ---- QC 1: Trait_Abbrv must equal the `trait` used in the loci ----
+trait_check <- gwas_cs_study %>%
+  distinct(gwas_id, trait) %>%
+  left_join(supp_table6 %>% select(gwas_id, Trait_Abbrv), by = "gwas_id")
+stopifnot(all(trait_check$trait == trait_check$Trait_Abbrv))
+
+## ---- QC 2: every study cited in Table 8 must be in Table 6 ----
+split_ids <- function(x) {
+  x <- x[!is.na(x) & x != ""]
+  unique(trimws(unlist(strsplit(x, ";", fixed = TRUE), use.names = FALSE)))
+}
+t8_studies_at_locus   <- split_ids(supplementary_table8_cbpnet_molqtl$GWAS_studies_at_locus)
+t8_studies_supporting <- split_ids(supplementary_table8_cbpnet_molqtl$GWAS_studies_supporting_colocalization)
+master_studies        <- split_ids(trait_locus_master$study_ids)
+
+s6_qc <- data.frame(
+  check = c("Table 6 == studies in trait_locus_master (all loci)",
+            "Table 8 studies_at_locus  subset of Table 6",
+            "Table 8 studies_supporting_coloc subset of Table 6"),
+  n_missing_from_table6 = c(
+    length(setdiff(master_studies, supp_table6$gwas_id)) +
+      length(setdiff(supp_table6$gwas_id, master_studies)),
+    length(setdiff(t8_studies_at_locus, supp_table6$gwas_id)),
+    length(setdiff(t8_studies_supporting, supp_table6$gwas_id))
+  )
+)
+s6_qc$passes_check <- s6_qc$n_missing_from_table6 == 0
+write.csv(s6_qc, file.path(output_dir, "QC_supp_table6_vs_table8_studies.csv"), row.names = FALSE)
+print(s6_qc)
+if (any(!s6_qc$passes_check)) stop("Supplementary Table 6 does not reconcile with Table 8. Inspect QC_supp_table6_vs_table8_studies.csv.")
+
+## ---- Per-study locus counts so Table 6 can be cross-checked by hand ----
+## (optional extra file; not part of the published Table 6 columns)
+s6_counts <- gwas_cs_study %>%
+  count(gwas_id, name = "n_gwas_credible_sets_in_study") %>%
+  left_join(
+    gwas_cs_study_annot %>%
+      group_by(gwas_id) %>%
+      summarise(n_cs_with_qtl_coloc = sum(eqtl_coloc | caqtl_coloc), .groups = "drop"),
+    by = "gwas_id"
+  )
+write.csv(s6_counts, file.path(output_dir, "Supplementary_Table_6_per_study_counts_QC.csv"), row.names = FALSE)
+
+## ---- Report ----
+message("Supplementary Table 6: ", nrow(supp_table6), " GWAS studies, ",
+        n_distinct(supp_table6$Trait_Abbrv), " traits, ",
+        n_distinct(supp_table6$PMID), " PMIDs")
+message("Studies listed in preprocessed_folder_names.txt: ", length(file_names))
+message("Listed studies with no credible sets (excluded from Table 6 and Table 8): ",
+        paste(setdiff(file_names, studies_used), collapse = ", "))
+message("Studies cited in Table 8 (at locus / supporting coloc): ",
+        length(t8_studies_at_locus), " / ", length(t8_studies_supporting))
+if (any(s6_noname)) {
+  message("Trait abbreviations without a full name: ",
+          paste(unique(supp_table6$Trait_Abbrv[s6_noname]), collapse = ", "))
+}
+
+## ---- Colocalization flags per study (from the retained coloc pairs) ----
+## Same universe/definition as Table 8: coloc_pairs_primary_study already
+## applies the p-value filters and requires the matching GWAS CS in the study.
+coloc_flags <- coloc_pairs_primary_study %>%
+  group_by(gwas_id) %>%
+  summarise(
+    Colocalized_eQTL  = any(qtl_type == "eQTL"),
+    Colocalized_caQTL = any(qtl_type == "caQTL"),
+    .groups = "drop"
+  )
+
+## Full-detail table: EVERY study listed in preprocessed_folder_names.txt,
+## with booleans showing how far each one got:
+##   Tested            = has >=1 converged GWAS credible set (in gwas_cs_study)
+##   Colocalized_eQTL  = >=1 retained eQTL-GWAS coloc pair
+##   Colocalized_caQTL = >=1 retained caQTL-GWAS coloc pair
+##   Colocalized_any   = eQTL or caQTL
+## Studies with Tested = FALSE are the listed studies that never entered the
+## analysis (no converged credible sets).
+parse_gwas_ids <- function(ids) {
+  pcs <- strsplit(sub("_preprocessed$", "", ids), "_", fixed = TRUE)
+  g <- function(i) vapply(pcs, function(p) if (length(p) >= i) p[i] else NA_character_, character(1))
+  out <- data.frame(
+    gwas_id     = ids,
+    Year        = suppressWarnings(as.integer(g(1))),
+    PMID        = g(2),
+    Trait_Abbrv = g(3),
+    Ethnicity   = vapply(pcs, function(p)
+      if (length(p) >= 4) paste(p[4:length(p)], collapse = "_") else NA_character_, character(1)),
+    stringsAsFactors = FALSE
+  )
+  out$Trait <- unname(trait_full_names[out$Trait_Abbrv])
+  nn <- is.na(out$Trait)
+  out$Trait[nn] <- out$Trait_Abbrv[nn]
+  out
+}
+
+supp_table6_flags <- parse_gwas_ids(sort(unique(union(file_names, studies_used)))) %>%
+  arrange(Year, PMID, gwas_id) %>%
+  left_join(coloc_flags, by = "gwas_id") %>%
+  mutate(
+    Tested            = gwas_id %in% studies_used,
+    Colocalized_eQTL  = replace_na(Colocalized_eQTL, FALSE),
+    Colocalized_caQTL = replace_na(Colocalized_caQTL, FALSE),
+    Colocalized_any   = Colocalized_eQTL | Colocalized_caQTL
+  ) %>%
+  select(gwas_id, Year, PMID, Trait_Abbrv, Ethnicity, Trait,
+         Tested, Colocalized_any, Colocalized_eQTL, Colocalized_caQTL)
+
+## Consistency: a study cannot be colocalized without being tested
+stopifnot(all(coloc_flags$gwas_id %in% studies_used))
+stopifnot(!any(supp_table6_flags$Colocalized_any & !supp_table6_flags$Tested))
+## The tested rows must reproduce the 6-column Table S6 exactly
+stopifnot(setequal(supp_table6_flags$gwas_id[supp_table6_flags$Tested], supp_table6$gwas_id))
+
+## Funnel numbers for the manuscript text
+## (earlier run: tested 117 / 59 traits; colocalized 91 (eQTL 73, caQTL 89) / 49 traits)
+tested_df <- supp_table6_flags[supp_table6_flags$Tested, ]
+message(sprintf("Listed: %d studies; Tested: %d studies / %d traits",
+                nrow(supp_table6_flags), nrow(tested_df), n_distinct(tested_df$Trait_Abbrv)))
+message(sprintf("Colocalized: %d studies (eQTL %d, caQTL %d, both %d) / %d traits",
+                sum(tested_df$Colocalized_any),
+                sum(tested_df$Colocalized_eQTL),
+                sum(tested_df$Colocalized_caQTL),
+                sum(tested_df$Colocalized_eQTL & tested_df$Colocalized_caQTL),
+                n_distinct(tested_df$Trait_Abbrv[tested_df$Colocalized_any])))
+message("Listed but not tested (no converged credible sets): ",
+        paste(supp_table6_flags$gwas_id[!supp_table6_flags$Tested], collapse = ", "))
+message("Tested but no colocalization: ",
+        sum(tested_df$Tested & !tested_df$Colocalized_any), " studies")
+
+## Per-trait breakdown (tested / colocalized), handy for the text and for checks
+trait_funnel <- tested_df %>%
+  group_by(Trait_Abbrv, Trait) %>%
+  summarise(n_studies_tested = n(),
+            n_studies_colocalized = sum(Colocalized_any),
+            n_eQTL = sum(Colocalized_eQTL),
+            n_caQTL = sum(Colocalized_caQTL),
+            .groups = "drop") %>%
+  arrange(desc(n_studies_tested))
+write.csv(trait_funnel, file.path(output_dir, "Supplementary_Table_6_trait_funnel_QC.csv"), row.names = FALSE)
+
+write.csv(supp_table6_flags,
+          file.path(output_dir, "Supplementary_Table_6_GWAS_studies_with_coloc_flags.csv"),
+          row.names = FALSE)
+
+## ---- Export (clean + manuscript-style) ----
+write.csv(supp_table6, file.path(output_dir, "Supplementary_Table_6_GWAS_studies.csv"), row.names = FALSE)
+
+s6_title  <- "Supplementary Table 6: List of GWAS Studies used for colocalization analyses"
+s6_legend <- paste0(
+  "Reference table describing the genome-wide association studies used for QTL-GWAS colocalization. ",
+  "gwas_id, study identifier used throughout the analysis; Year, publication year; PMID, PubMed identifier; ",
+  "Trait_Abbrv, abbreviated trait name; Ethnicity, ancestry or population represented in the GWAS; ",
+  "and Trait, full trait name. GWAS, genome-wide association study; PMID, PubMed identifier."
+)
+s6_styled <- file.path(output_dir, "Supplementary_Table_6_GWAS_studies_with_legend.csv")
+writeLines(c(paste0('"', s6_title, '"'), paste0('"', s6_legend, '"')), s6_styled)
+data.table::fwrite(supp_table6, s6_styled, append = TRUE, col.names = TRUE)
